@@ -104,7 +104,34 @@ void main() {
         heute: heute,
       )!;
       expect(aufgabe.favorit, isTrue);
+      // FAVORITE aus Bestandsdaten zählt als "wichtig".
+      expect(aufgabe.wichtig, isTrue);
       expect(aufgabe.meinTag, isTrue);
+    });
+
+    test('alte FELIX-MYDAY-Schreibweise wird beim Lesen erkannt', () {
+      final aufgabe = Aufgabe.ausICalendar(
+        vtodoIcal([
+          'SUMMARY:Alt markiert',
+          'CATEGORIES:FELIX-MYDAY-2026-07-05',
+        ]),
+        heute: DateTime(2026, 7, 5),
+      )!;
+      expect(aufgabe.meinTag, isTrue);
+    });
+
+    test('wichtig = hohe Priorität (1–4), nicht mittel/niedrig', () {
+      final hoch = Aufgabe.ausICalendar(vtodoIcal([
+        'SUMMARY:Hoch',
+        'PRIORITY:1',
+      ]))!;
+      expect(hoch.wichtig, isTrue);
+
+      final mittel = Aufgabe.ausICalendar(vtodoIcal([
+        'SUMMARY:Mittel',
+        'PRIORITY:5',
+      ]))!;
+      expect(mittel.wichtig, isFalse);
     });
 
     test('MYDAY-Marker von gestern verfällt', () {
@@ -112,7 +139,7 @@ void main() {
       final aufgabe = Aufgabe.ausICalendar(
         vtodoIcal([
           'SUMMARY:Gestern geplant',
-          'CATEGORIES:MYDAY-2026-07-04',
+          'CATEGORIES:FELIX-MYDAY-2026-07-04',
         ]),
         heute: heute,
       )!;
@@ -157,7 +184,7 @@ void main() {
     });
   });
 
-  test('mydayMarker formatiert mit führenden Nullen', () {
+  test('mydayMarker: neutral (ohne FELIX) und mit führenden Nullen', () {
     expect(Aufgabe.mydayMarker(DateTime(2026, 7, 5)), 'MYDAY-2026-07-05');
     expect(Aufgabe.mydayMarker(DateTime(2026, 11, 23)), 'MYDAY-2026-11-23');
   });

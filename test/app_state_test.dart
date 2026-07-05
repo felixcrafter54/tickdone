@@ -9,6 +9,10 @@ Aufgabe aufgabe(
   String? parentUid,
   bool erledigt = false,
   int? sortOrder,
+  bool favorit = false,
+  DateTime? faellig,
+  int prioritaet = 0,
+  DateTime? erstellt,
 }) =>
     Aufgabe(
       uid: uid,
@@ -16,6 +20,10 @@ Aufgabe aufgabe(
       erledigt: erledigt,
       parentUid: parentUid,
       sortOrder: sortOrder,
+      favorit: favorit,
+      faellig: faellig,
+      prioritaet: prioritaet,
+      erstellt: erstellt,
       rohIcal: '',
     );
 
@@ -58,6 +66,77 @@ void main() {
     test('aufgabeMitUid findet Aufgabe oder liefert null', () {
       expect(state.aufgabeMitUid('haupt-1')?.uid, 'haupt-1');
       expect(state.aufgabeMitUid('gibt-es-nicht'), isNull);
+    });
+  });
+
+  group('Filtern und Sortieren', () {
+    late AppState state;
+
+    setUp(() {
+      state = AppState();
+      state.aufgaben = [
+        aufgabe('b-offen',
+            sortOrder: 2048,
+            faellig: DateTime(2026, 8, 1),
+            prioritaet: 5,
+            erstellt: DateTime(2026, 7, 1)),
+        aufgabe('a-erledigt',
+            erledigt: true,
+            sortOrder: 1024,
+            prioritaet: 1,
+            erstellt: DateTime(2026, 7, 3)),
+        aufgabe('c-favorit',
+            favorit: true,
+            faellig: DateTime(2026, 7, 10),
+            erstellt: DateTime(2026, 7, 2)),
+      ];
+    });
+
+    test('Filter offen/erledigt/wichtig', () {
+      state.filter = AufgabenFilter.offen;
+      expect(state.wurzelAufgaben.map((a) => a.uid),
+          isNot(contains('a-erledigt')));
+
+      state.filter = AufgabenFilter.erledigt;
+      expect(state.wurzelAufgaben.map((a) => a.uid), ['a-erledigt']);
+
+      // Wichtig = hohe Priorität ODER alter FAVORITE-Marker.
+      state.filter = AufgabenFilter.wichtig;
+      expect(state.wurzelAufgaben.map((a) => a.uid).toSet(),
+          {'a-erledigt', 'c-favorit'});
+    });
+
+    test('Sortierung manuell: sortOrder, ohne Wert ans Ende', () {
+      state.sortierung = Sortierung.manuell;
+      expect(state.wurzelAufgaben.map((a) => a.uid),
+          ['a-erledigt', 'b-offen', 'c-favorit']);
+    });
+
+    test('Sortierung Fälligkeit aufsteigend, ohne Wert ans Ende', () {
+      state.sortierung = Sortierung.faelligkeit;
+      expect(state.wurzelAufgaben.map((a) => a.uid),
+          ['c-favorit', 'b-offen', 'a-erledigt']);
+    });
+
+    test('Sortierung Wichtig: wichtige zuerst', () {
+      state.sortierung = Sortierung.wichtig;
+      final uids = state.wurzelAufgaben.map((a) => a.uid).toList();
+      // a-erledigt (PRIORITY 1) und c-favorit (FAVORITE) sind wichtig,
+      // b-offen (PRIORITY 5) nicht.
+      expect(uids.sublist(0, 2).toSet(), {'a-erledigt', 'c-favorit'});
+      expect(uids.last, 'b-offen');
+    });
+
+    test('Sortierung Titel alphabetisch', () {
+      state.sortierung = Sortierung.titel;
+      expect(state.wurzelAufgaben.map((a) => a.uid),
+          ['a-erledigt', 'b-offen', 'c-favorit']);
+    });
+
+    test('Sortierung Erstellt: neueste zuerst', () {
+      state.sortierung = Sortierung.erstellt;
+      expect(state.wurzelAufgaben.map((a) => a.uid),
+          ['a-erledigt', 'c-favorit', 'b-offen']);
     });
   });
 }

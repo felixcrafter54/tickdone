@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:enough_icalendar/enough_icalendar.dart';
 
+import '../models/aufgabe.dart';
+
 /// Eine Änderung am Roh-iCalendar einer Aufgabe: nimmt den Text vom Server
 /// und liefert den geänderten Text. Als Funktion, damit sie bei einem
 /// ETag-Konflikt (412) auf den frisch geholten Stand erneut angewendet
@@ -71,14 +73,49 @@ void _setzeText(VTodo vtodo, String name, String? wert) {
   );
 }
 
-/// Priorität ändern (0 = keine = Property entfernen).
-IcalPatch prioritaetPatch(int prioritaet) => (ical) => patcheVTodo(
-    ical,
-    (vtodo) => vtodo.priorityInt = prioritaet == 0 ? null : prioritaet);
-
 /// Fälligkeit setzen oder (mit null) entfernen.
 IcalPatch faelligPatch(DateTime? datum) =>
     (ical) => patcheVTodo(ical, (vtodo) => vtodo.due = datum);
+
+/// "Wichtig" (Stern) setzen/entfernen – gespeichert als hohe Priorität
+/// (PRIORITY 1). Beim Entfernen wird auch der FAVORITE-Marker aus
+/// Bestandsdaten mit ausgeräumt, sonst bliebe der Stern hängen.
+IcalPatch wichtigPatch(bool wichtig) =>
+    (ical) => patcheVTodo(ical, (vtodo) {
+          vtodo.priorityInt = wichtig ? 1 : null;
+          if (!wichtig) {
+            final kategorien =
+                List<String>.from(vtodo.categories ?? const [])
+                  ..removeWhere((k) => k == 'FAVORITE');
+            vtodo.categories = kategorien.isEmpty ? null : kategorien;
+          }
+        });
+
+/// "Mein Tag" setzen/entfernen – Marker `MYDAY-<heute>` in CATEGORIES.
+/// Alte MYDAY-Marker (auch die alte Schreibweise FELIX-MYDAY-…) werden
+/// dabei immer entfernt, so verfällt die Markierung über Nacht von selbst.
+IcalPatch meinTagPatch(bool meinTag, {DateTime? heute}) =>
+    (ical) => patcheVTodo(ical, (vtodo) {
+          final kategorien = List<String>.from(vtodo.categories ?? const [])
+            ..removeWhere((k) => k.contains('MYDAY-'));
+          if (meinTag) {
+            kategorien.add(Aufgabe.mydayMarker(heute ?? DateTime.now()));
+          }
+          vtodo.categories = kategorien.isEmpty ? null : kategorien;
+        });
+
+/// Schritt zur eigenständigen Aufgabe höherstufen: Der Eltern-Bezug
+/// (RELATED-TO mit RELTYPE=PARENT oder ohne RELTYPE) wird entfernt
+/// (Design-Doc, Abschnitt 4).
+IcalPatch hochstufenPatch() => (ical) => patcheVTodo(ical, (vtodo) {
+      vtodo.properties.removeWhere((prop) {
+        if (prop.name != 'RELATED-TO') return false;
+        final reltype = prop.parameters['RELTYPE'];
+        return reltype == null ||
+            (reltype is RelationshipParameter &&
+                reltype.relationship == Relationship.parent);
+      });
+    });
 
 /// Erzeugt eine neue eindeutige UID für eine Aufgabe.
 String neueUid() {

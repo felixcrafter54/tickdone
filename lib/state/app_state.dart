@@ -5,6 +5,29 @@ import '../models/aufgabe.dart';
 import '../services/caldav_service.dart';
 import '../services/vtodo_patch.dart';
 
+/// Sortierung der Aufgabenliste (Spec, Abschnitt 3).
+enum Sortierung {
+  manuell('Manuell'),
+  faelligkeit('Fälligkeit'),
+  wichtig('Wichtig'),
+  titel('Titel'),
+  erstellt('Erstellt');
+
+  const Sortierung(this.anzeige);
+  final String anzeige;
+}
+
+/// Filter der Aufgabenliste (Spec, Abschnitt 3).
+enum AufgabenFilter {
+  alle('Alle'),
+  offen('Offen'),
+  erledigt('Erledigt'),
+  wichtig('Wichtig');
+
+  const AufgabenFilter(this.anzeige);
+  final String anzeige;
+}
+
 /// Zentraler App-Zustand: Verbindung und geladene Aufgabenlisten.
 ///
 /// Bewusst einfach gehalten: EIN ChangeNotifier, den `provider` der
@@ -63,6 +86,38 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Neue Aufgabenliste anlegen und die Übersicht aktualisieren.
+  Future<bool> erstelleListe(String name) async {
+    final bereinigt = name.trim();
+    if (bereinigt.isEmpty || !istVerbunden) return false;
+    try {
+      await _caldav.erstelleListe(bereinigt);
+      await listenNeuLaden();
+      return true;
+    } catch (fehler) {
+      fehlermeldung = 'Liste anlegen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Liste samt Inhalt löschen.
+  Future<bool> loescheListe(Calendar liste) async {
+    try {
+      await _caldav.loescheListe(liste);
+      if (aktiveListe?.uid == liste.uid) {
+        aktiveListe = null;
+        aufgaben = [];
+      }
+      await listenNeuLaden();
+      return true;
+    } catch (fehler) {
+      fehlermeldung = 'Liste löschen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      notifyListeners();
+      return false;
+    }
+  }
+
   // ---- Aufgaben der geöffneten Liste ----
 
   Calendar? aktiveListe;
@@ -70,10 +125,61 @@ class AppState extends ChangeNotifier {
   bool aufgabenLaden = false;
   String? aufgabenFehler;
 
-  /// Nur die Wurzel-Aufgaben – Schritte (Subtasks) erscheinen erst
-  /// in der Detailansicht (Spec, Abschnitt 3).
-  List<Aufgabe> get wurzelAufgaben =>
-      aufgaben.where((a) => !a.istSchritt).toList();
+  Sortierung sortierung = Sortierung.manuell;
+  AufgabenFilter filter = AufgabenFilter.alle;
+
+  void setzeSortierung(Sortierung neue) {
+    sortierung = neue;
+    notifyListeners();
+  }
+
+  void setzeFilter(AufgabenFilter neuer) {
+    filter = neuer;
+    notifyListeners();
+  }
+
+  /// Nur die Wurzel-Aufgaben, gefiltert und sortiert – Schritte (Subtasks)
+  /// erscheinen erst in der Detailansicht (Spec, Abschnitt 3).
+  List<Aufgabe> get wurzelAufgaben {
+    final gefiltert = aufgaben.where((a) {
+      if (a.istSchritt) return false;
+      return switch (filter) {
+        AufgabenFilter.alle => true,
+        AufgabenFilter.offen => !a.erledigt,
+        AufgabenFilter.erledigt => a.erledigt,
+        AufgabenFilter.wichtig => a.wichtig,
+      };
+    }).toList();
+    gefiltert.sort(_vergleicher(sortierung));
+    return gefiltert;
+  }
+
+  /// Vergleicher je Sortierung; fehlende Werte immer ans Ende.
+  static int Function(Aufgabe, Aufgabe) _vergleicher(Sortierung sortierung) {
+    int fehlendeAnsEnde<T>(T? a, T? b, int Function(T, T) vergleich) {
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return vergleich(a, b);
+    }
+
+    return switch (sortierung) {
+      Sortierung.manuell => (a, b) =>
+          fehlendeAnsEnde(a.sortOrder, b.sortOrder, (x, y) => x.compareTo(y)),
+      Sortierung.faelligkeit => (a, b) =>
+          fehlendeAnsEnde(a.faellig, b.faellig, (x, y) => x.compareTo(y)),
+      // Wichtige (Stern) zuerst.
+      Sortierung.wichtig => (a, b) {
+        if (a.wichtig == b.wichtig) return 0;
+        return a.wichtig ? -1 : 1;
+      },
+      Sortierung.titel => (a, b) =>
+          a.titel.toLowerCase().compareTo(b.titel.toLowerCase()),
+      // Neueste zuerst.
+      Sortierung.erstellt => (a, b) =>
+          fehlendeAnsEnde(a.erstellt, b.erstellt, (x, y) => y.compareTo(x)),
+    };
+  }
 
   /// Aufgabe per UID – null, wenn sie (nach einem Neuladen) nicht mehr da ist.
   Aufgabe? aufgabeMitUid(String uid) =>
@@ -166,14 +272,6 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  /// Priorität ändern (sofort speichern).
-  Future<void> setzePrioritaet(String uid, int prioritaet) =>
-      _aendereUndSpeichere(
-        uid,
-        lokal: (a) => a.kopieMit(prioritaet: prioritaet),
-        patch: prioritaetPatch(prioritaet),
-      );
-
   /// Fälligkeit setzen oder entfernen (sofort speichern).
   Future<void> setzeFaellig(String uid, DateTime? datum) =>
       _aendereUndSpeichere(
@@ -182,6 +280,26 @@ class AppState extends ChangeNotifier {
             ? a.kopieMit(faelligEntfernen: true)
             : a.kopieMit(faellig: datum),
         patch: faelligPatch(datum),
+      );
+
+  /// "Wichtig" (Stern) setzen/entfernen – gespeichert als PRIORITY 1.
+  Future<void> setzeWichtig(String uid, bool wichtig) =>
+      _aendereUndSpeichere(
+        uid,
+        lokal: (a) => a.kopieMit(
+          prioritaet: wichtig ? 1 : 0,
+          favorit: wichtig ? null : false,
+        ),
+        patch: wichtigPatch(wichtig),
+      );
+
+  /// "Mein Tag" setzen/entfernen (sofort speichern).
+  /// Der Marker trägt das heutige Datum und verfällt über Nacht.
+  Future<void> setzeMeinTag(String uid, bool meinTag) =>
+      _aendereUndSpeichere(
+        uid,
+        lokal: (a) => a.kopieMit(meinTag: meinTag),
+        patch: meinTagPatch(meinTag),
       );
 
   /// Neue Aufgabe (oder mit [parentUid] einen Schritt) anlegen.
@@ -198,6 +316,89 @@ class AppState extends ChangeNotifier {
     } catch (fehler) {
       aufgabenFehler = 'Anlegen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
       notifyListeners();
+      return false;
+    }
+  }
+
+  /// Schritt zur eigenständigen Aufgabe höherstufen
+  /// (Design-Doc, Abschnitt 4: Eltern-Bezug entfernen).
+  Future<void> stufeSchrittHoch(String uid) {
+    final schritt = aufgabeMitUid(uid);
+    if (schritt == null || !schritt.istSchritt) return Future.value();
+    return _aendereUndSpeichere(
+      uid,
+      // Lokal sofort als Wurzel-Aufgabe zeigen: Neu-Parsen des
+      // gepatchten iCals passiert nach dem Speichern automatisch.
+      lokal: (a) => Aufgabe(
+        uid: a.uid,
+        titel: a.titel,
+        erledigt: a.erledigt,
+        parentUid: null,
+        faellig: a.faellig,
+        prioritaet: a.prioritaet,
+        notiz: a.notiz,
+        prozent: a.prozent,
+        sequence: a.sequence,
+        sortOrder: a.sortOrder,
+        favorit: a.favorit,
+        meinTag: a.meinTag,
+        erstellt: a.erstellt,
+        etag: a.etag,
+        href: a.href,
+        rohIcal: a.rohIcal,
+      ),
+      patch: hochstufenPatch(),
+    );
+  }
+
+  /// Aufgabe samt ihrer Schritte in eine andere Liste verschieben
+  /// (Design-Doc, Abschnitt 5).
+  Future<bool> verschiebeAufgabe(String uid, Calendar ziel) async {
+    final aufgabe = aufgabeMitUid(uid);
+    if (aufgabe == null) return false;
+    final zuVerschieben = [
+      aufgabe,
+      ...aufgaben.where((a) => a.parentUid == uid),
+    ];
+    aufgaben.removeWhere((a) => a.uid == uid || a.parentUid == uid);
+    notifyListeners();
+    try {
+      for (final einzelne in zuVerschieben) {
+        await _caldav.verschiebeAufgabe(einzelne, ziel);
+      }
+      await aufgabenNeuLaden();
+      return true;
+    } catch (fehler) {
+      aufgabenFehler =
+          'Verschieben fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      await aufgabenNeuLaden();
+      return false;
+    }
+  }
+
+  /// Aufgabe samt ihrer Schritte löschen (wie in der Desktop-App:
+  /// Schritte hängen an der Aufgabe und gehen mit ihr).
+  /// Optimistisch aus der Anzeige entfernt, danach neu geladen
+  /// (Spec: bei Anlegen/Löschen neu laden).
+  Future<bool> loescheAufgabe(String uid) async {
+    final aufgabe = aufgabeMitUid(uid);
+    if (aufgabe == null) return false;
+    final zuLoeschen = [
+      ...aufgaben.where((a) => a.parentUid == uid),
+      aufgabe,
+    ];
+    aufgaben.removeWhere((a) => a.uid == uid || a.parentUid == uid);
+    notifyListeners();
+    try {
+      for (final einzelne in zuLoeschen) {
+        await _caldav.loescheAufgabe(einzelne);
+      }
+      await aufgabenNeuLaden();
+      return true;
+    } catch (fehler) {
+      aufgabenFehler = 'Löschen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      // Anzeige wieder mit dem Server abgleichen.
+      await aufgabenNeuLaden();
       return false;
     }
   }

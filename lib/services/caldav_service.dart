@@ -130,6 +130,47 @@ class CalDavService {
     return aufgaben;
   }
 
+  /// Neue Aufgabenliste anlegen – MKCALENDAR mit
+  /// supported-calendar-component-set VTODO (Spec, Abschnitt 2).
+  Future<void> erstelleListe(String name) async {
+    await client.createCalendar(name, supportedComponents: const ['VTODO']);
+  }
+
+  /// Liste samt Inhalt löschen (DELETE auf die Collection).
+  Future<void> loescheListe(Calendar liste) async {
+    await client.deleteCalendar(liste);
+  }
+
+  /// Aufgabe in eine andere Liste verschieben: unverändertes iCalendar
+  /// in die Ziel-Collection legen (If-None-Match: *), dann das Original
+  /// löschen. Erst nach erfolgreichem Anlegen wird gelöscht –
+  /// so geht bei einem Fehler nichts verloren.
+  Future<void> verschiebeAufgabe(Aufgabe aufgabe, Calendar ziel) async {
+    final dateiname = aufgabe.href?.pathSegments.lastOrNull ??
+        '${aufgabe.uid}.ics';
+    final zielHref = ziel.href.resolve(dateiname);
+    await client.webdavClient.put(
+      zielHref.toString(),
+      body: aufgabe.rohIcal,
+      ifNoneMatch: '*',
+    );
+    await loescheAufgabe(aufgabe);
+  }
+
+  /// Einzelne Aufgabe löschen (DELETE mit If-Match).
+  /// 404 gilt als Erfolg – dann war sie schon weg.
+  Future<void> loescheAufgabe(Aufgabe aufgabe) async {
+    final href = aufgabe.href;
+    if (href == null) return;
+    try {
+      await client.webdavClient
+          .delete(href.toString(), ifMatch: aufgabe.etag);
+    } on DioException catch (fehler) {
+      if (fehler.response?.statusCode == 404) return;
+      rethrow;
+    }
+  }
+
   /// Speichert eine Änderung an einer Aufgabe verlustfrei.
   ///
   /// Ablauf nach Spec, Abschnitt 2: Roh-iCalendar patchen (SEQUENCE +1,

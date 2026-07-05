@@ -91,7 +91,22 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     final farben = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: Text(appState.aktiveListe?.displayName ?? '')),
+      appBar: AppBar(
+        title: Text(appState.aktiveListe?.displayName ?? ''),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Aufgabe löschen',
+            onPressed: () async {
+              final geloescht = await AufgabenScreen.loeschenBestaetigen(
+                  context, aufgabe);
+              if (geloescht && context.mounted) {
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -157,30 +172,28 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                         .setzeFaellig(widget.uid, null),
                 deleteButtonTooltipMessage: 'Fälligkeit entfernen',
               ),
-              DropdownButton<int>(
-                value: _prioStufe(aufgabe.prioritaet),
-                underline: const SizedBox.shrink(),
-                items: const [
-                  DropdownMenuItem(value: 0, child: Text('Keine Priorität')),
-                  DropdownMenuItem(value: 1, child: Text('Hoch')),
-                  DropdownMenuItem(value: 5, child: Text('Mittel')),
-                  DropdownMenuItem(value: 9, child: Text('Niedrig')),
-                ],
-                onChanged: (wert) {
-                  if (wert != null) {
-                    context
-                        .read<AppState>()
-                        .setzePrioritaet(widget.uid, wert);
-                  }
-                },
+              // "Mein Tag" umschalten – Marker verfällt über Nacht.
+              FilterChip(
+                avatar: aufgabe.meinTag
+                    ? null
+                    : const Icon(Icons.wb_sunny_outlined, size: 18),
+                label: const Text('Mein Tag'),
+                selected: aufgabe.meinTag,
+                onSelected: (wert) =>
+                    context.read<AppState>().setzeMeinTag(widget.uid, wert),
               ),
-              if (aufgabe.meinTag)
-                const Chip(
-                  avatar: Icon(Icons.wb_sunny_outlined, size: 18),
-                  label: Text('Mein Tag'),
-                ),
-              if (aufgabe.favorit)
-                Icon(Icons.star, color: Colors.amber.shade600),
+              // Stern = als wichtig markieren (hohe Priorität).
+              IconButton(
+                icon: aufgabe.wichtig
+                    ? Icon(Icons.star, color: Colors.amber.shade600)
+                    : Icon(Icons.star_border, color: farben.outline),
+                tooltip: aufgabe.wichtig
+                    ? 'Wichtig entfernen'
+                    : 'Als wichtig markieren',
+                onPressed: () => context
+                    .read<AppState>()
+                    .setzeWichtig(widget.uid, !aufgabe.wichtig),
+              ),
             ],
           ),
 
@@ -232,6 +245,49 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                       )
                     : null,
               ),
+              // Drei-Punkte-Menü je Schritt (Design-Doc, Abschnitt 4).
+              trailing: PopupMenuButton<void Function()>(
+                icon: const Icon(Icons.more_vert, size: 18),
+                tooltip: 'Schritt-Aktionen',
+                onSelected: (aktion) => aktion(),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: () => context
+                        .read<AppState>()
+                        .setzeErledigt(schritt.uid, !schritt.erledigt),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(schritt.erledigt
+                          ? Icons.radio_button_unchecked
+                          : Icons.check_circle_outline),
+                      title: Text(schritt.erledigt
+                          ? 'Als offen markieren'
+                          : 'Als erledigt markieren'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: () => context
+                        .read<AppState>()
+                        .stufeSchrittHoch(schritt.uid),
+                    child: const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.upgrade),
+                      title: Text('Zur Aufgabe höherstufen'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: () => AufgabenScreen.loeschenBestaetigen(
+                        context, schritt),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.delete_outline,
+                          color: farben.error),
+                      title: Text('Schritt löschen',
+                          style: TextStyle(color: farben.error)),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
           // Notiz (Auto-Save beim Verlassen des Feldes)
@@ -251,14 +307,6 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
         ],
       ),
     );
-  }
-
-  /// Priorität aufs Dropdown-Raster abbilden (1–4 hoch, 5 mittel, 6–9 niedrig).
-  int _prioStufe(int prioritaet) {
-    if (prioritaet == 0) return 0;
-    if (prioritaet <= 4) return 1;
-    if (prioritaet == 5) return 5;
-    return 9;
   }
 
   String _datum(DateTime wert) {

@@ -8,7 +8,8 @@ import 'login_screen.dart';
 
 /// Übersicht der Aufgabenlisten (Collections mit VTODO) nach der Anmeldung.
 ///
-/// Antippen einer Liste lädt später deren Aufgaben (Spec, Schritt 3).
+/// Antippen öffnet die Aufgaben, langes Drücken bietet Löschen an,
+/// der Plus-Button legt eine neue Liste an (MKCALENDAR mit VTODO).
 class ListenScreen extends StatelessWidget {
   const ListenScreen({super.key});
 
@@ -17,6 +18,63 @@ class ListenScreen extends StatelessWidget {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
+  }
+
+  Future<void> _neueListeDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Neue Liste'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Name'),
+          onSubmitted: (wert) => Navigator.of(dialogContext).pop(wert),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('Anlegen'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty || !context.mounted) return;
+    await context.read<AppState>().erstelleListe(name);
+  }
+
+  Future<void> _loeschenBestaetigen(
+      BuildContext context, Calendar liste) async {
+    final bestaetigt = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Liste "${liste.displayName}" löschen?'),
+        content: const Text(
+            'Alle Aufgaben dieser Liste werden endgültig gelöscht.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (bestaetigt == true && context.mounted) {
+      await context.read<AppState>().loescheListe(liste);
+    }
   }
 
   @override
@@ -86,12 +144,20 @@ class ListenScreen extends StatelessWidget {
                               ),
                             );
                           },
+                          // Kontextaktion (Spec: langes Tippen auf Mobile).
+                          onLongPress: () =>
+                              _loeschenBestaetigen(context, liste),
                         );
                       },
                     ),
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Neue Liste',
+        onPressed: () => _neueListeDialog(context),
+        child: const Icon(Icons.add),
       ),
     );
   }

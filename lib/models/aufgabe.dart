@@ -62,6 +62,10 @@ class Aufgabe {
   /// Schritte (Subtasks) sind Aufgaben mit Eltern-Verweis.
   bool get istSchritt => parentUid != null;
 
+  /// "Wichtig" (Stern) = hohe Priorität (PRIORITY 1–4).
+  /// Der alte FAVORITE-Marker aus Bestandsdaten zählt beim Lesen mit.
+  bool get wichtig => (prioritaet >= 1 && prioritaet <= 4) || favorit;
+
   /// Kopie mit geänderten Feldern – für optimistische Updates
   /// (lokal sofort anzeigen, im Hintergrund speichern).
   /// [faelligEntfernen] löscht die Fälligkeit, da null hier
@@ -74,6 +78,8 @@ class Aufgabe {
     int? prioritaet,
     String? notiz,
     int? prozent,
+    bool? favorit,
+    bool? meinTag,
     String? etag,
     String? rohIcal,
   }) {
@@ -88,8 +94,8 @@ class Aufgabe {
       prozent: prozent ?? this.prozent,
       sequence: sequence,
       sortOrder: sortOrder,
-      favorit: favorit,
-      meinTag: meinTag,
+      favorit: favorit ?? this.favorit,
+      meinTag: meinTag ?? this.meinTag,
       erstellt: erstellt,
       etag: etag ?? this.etag,
       href: href,
@@ -117,7 +123,12 @@ class Aufgabe {
     if (vtodo == null) return null;
 
     final kategorien = vtodo.categories ?? const <String>[];
-    final tagesMarker = mydayMarker(heute ?? DateTime.now());
+    // Geschrieben wird der neutrale Marker MYDAY-<datum> (die App soll
+    // auch von anderen genutzt werden). Beim Lesen wird zusätzlich die
+    // alte Form FELIX-MYDAY-<datum> der Python-Desktop-App erkannt.
+    final tag = heute ?? DateTime.now();
+    final tagesMarker = mydayMarker(tag);
+    final altMarker = 'FELIX-${mydayMarker(tag)}';
 
     return Aufgabe(
       uid: vtodo.uid,
@@ -137,7 +148,8 @@ class Aufgabe {
       sortOrder: _parseSortOrder(
           vtodo.getProperty('X-APPLE-SORT-ORDER')?.textValue),
       favorit: kategorien.contains('FAVORITE'),
-      meinTag: kategorien.contains(tagesMarker),
+      meinTag: kategorien.contains(tagesMarker) ||
+          kategorien.contains(altMarker),
       erstellt: vtodo.created,
       etag: etag,
       href: href,
@@ -177,10 +189,12 @@ class Aufgabe {
   }
 
   /// Der "Mein Tag"-Marker für ein Datum, z.B. MYDAY-2026-07-05.
-  static String mydayMarker(DateTime tag) {
+  static String mydayMarker(DateTime tag) => 'MYDAY-${_datumsTeil(tag)}';
+
+  static String _datumsTeil(DateTime tag) {
     final monat = tag.month.toString().padLeft(2, '0');
     final t = tag.day.toString().padLeft(2, '0');
-    return 'MYDAY-${tag.year}-$monat-$t';
+    return '${tag.year}-$monat-$t';
   }
 
   /// Manche Clients schreiben X-APPLE-SORT-ORDER als Kommazahl
