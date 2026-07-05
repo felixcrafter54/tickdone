@@ -74,6 +74,34 @@ class AppState extends ChangeNotifier {
   List<Aufgabe> get wurzelAufgaben =>
       aufgaben.where((a) => !a.istSchritt).toList();
 
+  /// Aufgabe per UID – null, wenn sie (nach einem Neuladen) nicht mehr da ist.
+  Aufgabe? aufgabeMitUid(String uid) =>
+      aufgaben.where((a) => a.uid == uid).firstOrNull;
+
+  /// Die Schritte einer Aufgabe, manuell sortiert (X-APPLE-SORT-ORDER,
+  /// ohne Wert ans Ende).
+  List<Aufgabe> schritteVon(String parentUid) {
+    final schritte =
+        aufgaben.where((a) => a.parentUid == parentUid).toList()
+          ..sort((a, b) {
+            if (a.sortOrder == null && b.sortOrder == null) return 0;
+            if (a.sortOrder == null) return 1;
+            if (b.sortOrder == null) return -1;
+            return a.sortOrder!.compareTo(b.sortOrder!);
+          });
+    return schritte;
+  }
+
+  /// Fortschritt "x von y" – null, wenn die Aufgabe keine Schritte hat.
+  ({int erledigt, int gesamt})? fortschrittVon(String uid) {
+    final schritte = aufgaben.where((a) => a.parentUid == uid);
+    if (schritte.isEmpty) return null;
+    return (
+      erledigt: schritte.where((s) => s.erledigt).length,
+      gesamt: schritte.length,
+    );
+  }
+
   /// Liste öffnen und ihre Aufgaben laden.
   Future<void> oeffneListe(Calendar liste) async {
     aktiveListe = liste;
