@@ -121,6 +121,14 @@ void main() {
       expect(aufgabe.sortOrder, 42);
     });
 
+    test('X-APPLE-SORT-ORDER als Kommazahl (Radicale/MS To Do)', () {
+      final aufgabe = Aufgabe.ausICalendar(vtodoIcal([
+        'SUMMARY:Sortiert',
+        'X-APPLE-SORT-ORDER:3072.0',
+      ]))!;
+      expect(aufgabe.sortOrder, 3072);
+    });
+
     test('Roh-iCalendar bleibt unverändert erhalten', () {
       final ical = vtodoIcal([
         'SUMMARY:Original',

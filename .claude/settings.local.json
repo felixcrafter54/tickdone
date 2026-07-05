@@ -8,7 +8,8 @@
       "PowerShell(flutter analyze)",
       "PowerShell(flutter test)",
       "WebFetch(domain:pub.dev)",
-      "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\\\\Pub\\\\Cache\\\\hosted\\\\pub.dev\\\\enough_icalendar-0.17.0\\\\lib\" -Recurse -File | Select-Object -ExpandProperty FullName)"
+      "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\\\\Pub\\\\Cache\\\\hosted\\\\pub.dev\\\\enough_icalendar-0.17.0\\\\lib\" -Recurse -File | Select-Object -ExpandProperty FullName)",
+      "PowerShell(git push -u origin feature/aufgaben-laden)"
     ]
   }
 }

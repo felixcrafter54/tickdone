@@ -95,8 +95,8 @@ class Aufgabe {
       notiz: vtodo.description ?? '',
       prozent: vtodo.percentComplete ?? 0,
       sequence: vtodo.sequence ?? 0,
-      sortOrder: int.tryParse(
-          vtodo.getProperty('X-APPLE-SORT-ORDER')?.textValue ?? ''),
+      sortOrder: _parseSortOrder(
+          vtodo.getProperty('X-APPLE-SORT-ORDER')?.textValue),
       favorit: kategorien.contains('FAVORITE'),
       meinTag: kategorien.contains(tagesMarker),
       erstellt: vtodo.created,
@@ -111,6 +111,13 @@ class Aufgabe {
     final monat = tag.month.toString().padLeft(2, '0');
     final t = tag.day.toString().padLeft(2, '0');
     return 'MYDAY-${tag.year}-$monat-$t';
+  }
+
+  /// Manche Clients schreiben X-APPLE-SORT-ORDER als Kommazahl
+  /// (z.B. "3072.0") – deshalb über num parsen und runden.
+  static int? _parseSortOrder(String? wert) {
+    if (wert == null || wert.isEmpty) return null;
+    return num.tryParse(wert)?.round();
   }
 
   /// Ermittelt die Eltern-UID aus den RELATED-TO-Properties.
