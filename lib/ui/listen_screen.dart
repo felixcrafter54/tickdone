@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import 'aufgaben_screen.dart';
 import 'login_screen.dart';
 
 /// Übersicht der Aufgabenlisten (Collections mit VTODO) nach der Anmeldung.
@@ -76,12 +77,12 @@ class ListenScreen extends StatelessWidget {
                               ? Text(liste.description!)
                               : null,
                           onTap: () {
-                            // Aufgaben laden kommt in Schritt 3 der Spec.
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    '"${liste.displayName}" – Aufgaben laden '
-                                    'folgt im nächsten Schritt.'),
+                            // Laden anstoßen und sofort navigieren –
+                            // der Screen zeigt den Ladefortschritt selbst.
+                            context.read<AppState>().oeffneListe(liste);
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AufgabenScreen(),
                               ),
                             );
                           },
