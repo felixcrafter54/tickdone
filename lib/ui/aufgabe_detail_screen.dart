@@ -261,11 +261,48 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                       )
                     : null,
               ),
-              trailing: IconButton(
-                icon: const Icon(Icons.close, size: 18),
-                tooltip: 'Schritt löschen',
-                onPressed: () =>
-                    AufgabenScreen.loeschenBestaetigen(context, schritt),
+              // Drei-Punkte-Menü je Schritt (Design-Doc, Abschnitt 4).
+              trailing: PopupMenuButton<void Function()>(
+                icon: const Icon(Icons.more_vert, size: 18),
+                tooltip: 'Schritt-Aktionen',
+                onSelected: (aktion) => aktion(),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: () => context
+                        .read<AppState>()
+                        .setzeErledigt(schritt.uid, !schritt.erledigt),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(schritt.erledigt
+                          ? Icons.radio_button_unchecked
+                          : Icons.check_circle_outline),
+                      title: Text(schritt.erledigt
+                          ? 'Als offen markieren'
+                          : 'Als erledigt markieren'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: () => context
+                        .read<AppState>()
+                        .stufeSchrittHoch(schritt.uid),
+                    child: const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.upgrade),
+                      title: Text('Zur Aufgabe höherstufen'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: () => AufgabenScreen.loeschenBestaetigen(
+                        context, schritt),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.delete_outline,
+                          color: farben.error),
+                      title: Text('Schritt löschen',
+                          style: TextStyle(color: farben.error)),
+                    ),
+                  ),
+                ],
               ),
             ),
 

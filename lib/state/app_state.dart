@@ -325,6 +325,62 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Schritt zur eigenständigen Aufgabe höherstufen
+  /// (Design-Doc, Abschnitt 4: Eltern-Bezug entfernen).
+  Future<void> stufeSchrittHoch(String uid) {
+    final schritt = aufgabeMitUid(uid);
+    if (schritt == null || !schritt.istSchritt) return Future.value();
+    return _aendereUndSpeichere(
+      uid,
+      // Lokal sofort als Wurzel-Aufgabe zeigen: Neu-Parsen des
+      // gepatchten iCals passiert nach dem Speichern automatisch.
+      lokal: (a) => Aufgabe(
+        uid: a.uid,
+        titel: a.titel,
+        erledigt: a.erledigt,
+        parentUid: null,
+        faellig: a.faellig,
+        prioritaet: a.prioritaet,
+        notiz: a.notiz,
+        prozent: a.prozent,
+        sequence: a.sequence,
+        sortOrder: a.sortOrder,
+        favorit: a.favorit,
+        meinTag: a.meinTag,
+        erstellt: a.erstellt,
+        etag: a.etag,
+        href: a.href,
+        rohIcal: a.rohIcal,
+      ),
+      patch: hochstufenPatch(),
+    );
+  }
+
+  /// Aufgabe samt ihrer Schritte in eine andere Liste verschieben
+  /// (Design-Doc, Abschnitt 5).
+  Future<bool> verschiebeAufgabe(String uid, Calendar ziel) async {
+    final aufgabe = aufgabeMitUid(uid);
+    if (aufgabe == null) return false;
+    final zuVerschieben = [
+      aufgabe,
+      ...aufgaben.where((a) => a.parentUid == uid),
+    ];
+    aufgaben.removeWhere((a) => a.uid == uid || a.parentUid == uid);
+    notifyListeners();
+    try {
+      for (final einzelne in zuVerschieben) {
+        await _caldav.verschiebeAufgabe(einzelne, ziel);
+      }
+      await aufgabenNeuLaden();
+      return true;
+    } catch (fehler) {
+      aufgabenFehler =
+          'Verschieben fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      await aufgabenNeuLaden();
+      return false;
+    }
+  }
+
   /// Aufgabe samt ihrer Schritte löschen (wie in der Desktop-App:
   /// Schritte hängen an der Aufgabe und gehen mit ihr).
   /// Optimistisch aus der Anzeige entfernt, danach neu geladen

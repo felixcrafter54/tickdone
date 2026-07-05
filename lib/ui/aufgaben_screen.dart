@@ -49,6 +49,141 @@ class AufgabenScreen extends StatelessWidget {
         .erstelleAufgabe(titel, parentUid: parentUid);
   }
 
+  /// Kontextmenü einer Aufgabe (Design-Doc, Abschnitt 5) –
+  /// auf Mobile per langem Tippen.
+  static Future<void> kontextMenue(
+    BuildContext context,
+    Aufgabe aufgabe,
+  ) async {
+    final appState = context.read<AppState>();
+    final heute = DateTime.now();
+    final morgen = heute.add(const Duration(days: 1));
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        void schliessenUnd(void Function() aktion) {
+          Navigator.of(sheetContext).pop();
+          aktion();
+        }
+
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.wb_sunny_outlined),
+                title: Text(aufgabe.meinTag
+                    ? 'Aus "Mein Tag" entfernen'
+                    : 'Zu "Mein Tag" hinzufügen'),
+                onTap: () => schliessenUnd(() =>
+                    appState.setzeMeinTag(aufgabe.uid, !aufgabe.meinTag)),
+              ),
+              ListTile(
+                leading: Icon(
+                    aufgabe.favorit ? Icons.star : Icons.star_border),
+                title: Text(aufgabe.favorit
+                    ? 'Wichtig entfernen'
+                    : 'Als wichtig markieren'),
+                onTap: () => schliessenUnd(() =>
+                    appState.setzeFavorit(aufgabe.uid, !aufgabe.favorit)),
+              ),
+              ListTile(
+                leading: Icon(aufgabe.erledigt
+                    ? Icons.radio_button_unchecked
+                    : Icons.check_circle_outline),
+                title: Text(aufgabe.erledigt
+                    ? 'Als offen markieren'
+                    : 'Als erledigt markieren'),
+                onTap: () => schliessenUnd(() =>
+                    appState.setzeErledigt(aufgabe.uid, !aufgabe.erledigt)),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.today),
+                title: const Text('Heute fällig'),
+                onTap: () => schliessenUnd(() => appState.setzeFaellig(
+                    aufgabe.uid, DateTime(heute.year, heute.month, heute.day))),
+              ),
+              ListTile(
+                leading: const Icon(Icons.event),
+                title: const Text('Morgen fällig'),
+                onTap: () => schliessenUnd(() => appState.setzeFaellig(
+                    aufgabe.uid,
+                    DateTime(morgen.year, morgen.month, morgen.day))),
+              ),
+              if (aufgabe.faellig != null)
+                ListTile(
+                  leading: const Icon(Icons.event_busy),
+                  title: const Text('Termin entfernen'),
+                  onTap: () => schliessenUnd(
+                      () => appState.setzeFaellig(aufgabe.uid, null)),
+                ),
+              const Divider(height: 1),
+              // Nur die ANDEREN Listen anbieten (Design-Doc, Abschnitt 5).
+              if (aufgabe.parentUid == null &&
+                  appState.aufgabenlisten
+                      .where((l) => l.uid != appState.aktiveListe?.uid)
+                      .isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.drive_file_move_outline),
+                  title: const Text('Aufgabe verschieben in …'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _verschiebenMenue(context, aufgabe);
+                  },
+                ),
+              ListTile(
+                leading: Icon(Icons.delete_outline,
+                    color: Theme.of(sheetContext).colorScheme.error),
+                title: Text(
+                  'Aufgabe löschen',
+                  style: TextStyle(
+                      color: Theme.of(sheetContext).colorScheme.error),
+                ),
+                onTap: () => schliessenUnd(
+                    () => loeschenBestaetigen(context, aufgabe)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Untermenü "Verschieben in …" mit den anderen Listen.
+  static Future<void> _verschiebenMenue(
+    BuildContext context,
+    Aufgabe aufgabe,
+  ) async {
+    final appState = context.read<AppState>();
+    final andereListen = appState.aufgabenlisten
+        .where((l) => l.uid != appState.aktiveListe?.uid)
+        .toList();
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text('Verschieben in …',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            for (final liste in andereListen)
+              ListTile(
+                leading: const Icon(Icons.checklist),
+                title: Text(liste.displayName),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  appState.verschiebeAufgabe(aufgabe.uid, liste);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Nachfrage und Löschen einer Aufgabe bzw. eines Schritts.
   /// Gibt true zurück, wenn gelöscht wurde.
   static Future<bool> loeschenBestaetigen(
@@ -122,6 +257,11 @@ class AufgabenScreen extends StatelessWidget {
                   child: Text(wert.anzeige),
                 ),
             ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Aktualisieren',
+            onPressed: () => context.read<AppState>().aufgabenNeuLaden(),
           ),
         ],
       ),
@@ -232,22 +372,29 @@ class _AufgabenZeile extends StatelessWidget {
           ),
         );
       },
-      // Kontextaktion (Spec: langes Tippen auf Mobile).
-      onLongPress: () =>
-          AufgabenScreen.loeschenBestaetigen(context, aufgabe),
+      // Kontextmenü mit Schnellaktionen (Design-Doc, Abschnitt 5).
+      onLongPress: () => AufgabenScreen.kontextMenue(context, aufgabe),
     );
   }
 
+  // Meta-Zeile nach Design-Doc, Abschnitt 3:
+  // Fälligkeit · Priorität · Fortschritt · Notiz-Hinweis
   Widget? _untertitel() {
     final teile = <String>[
+      if (aufgabe.faellig != null) 'Fällig: ${_datum(aufgabe.faellig!)}',
+      if (aufgabe.prioritaet != 0) _prioritaetsLabel(aufgabe.prioritaet),
       if (fortschritt != null)
         '${fortschritt!.erledigt} von ${fortschritt!.gesamt}',
-      if (aufgabe.faellig != null) 'Fällig: ${_datum(aufgabe.faellig!)}',
-      if (aufgabe.prioritaet == 1) 'Hohe Priorität',
-      if (aufgabe.meinTag) 'Mein Tag',
+      if (aufgabe.notiz.isNotEmpty) 'Notiz',
     ];
     if (teile.isEmpty) return null;
     return Text(teile.join(' · '));
+  }
+
+  String _prioritaetsLabel(int prioritaet) {
+    if (prioritaet <= 4) return 'Hohe Priorität';
+    if (prioritaet == 5) return 'Mittlere Priorität';
+    return 'Niedrige Priorität';
   }
 
   String _datum(DateTime wert) {

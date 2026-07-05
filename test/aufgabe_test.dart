@@ -94,16 +94,27 @@ void main() {
       expect(aufgabe.parentUid, 'eltern-uid');
     });
 
-    test('CATEGORIES-Marker: FAVORITE und tagesaktueller MYDAY', () {
+    test('CATEGORIES-Marker: FAVORITE und tagesaktueller FELIX-MYDAY', () {
       final heute = DateTime(2026, 7, 5);
       final aufgabe = Aufgabe.ausICalendar(
         vtodoIcal([
           'SUMMARY:Wichtig',
-          'CATEGORIES:FAVORITE,MYDAY-2026-07-05',
+          'CATEGORIES:FAVORITE,FELIX-MYDAY-2026-07-05',
         ]),
         heute: heute,
       )!;
       expect(aufgabe.favorit, isTrue);
+      expect(aufgabe.meinTag, isTrue);
+    });
+
+    test('alte MYDAY-Schreibweise ohne FELIX-Präfix wird auch erkannt', () {
+      final aufgabe = Aufgabe.ausICalendar(
+        vtodoIcal([
+          'SUMMARY:Alt markiert',
+          'CATEGORIES:MYDAY-2026-07-05',
+        ]),
+        heute: DateTime(2026, 7, 5),
+      )!;
       expect(aufgabe.meinTag, isTrue);
     });
 
@@ -112,7 +123,7 @@ void main() {
       final aufgabe = Aufgabe.ausICalendar(
         vtodoIcal([
           'SUMMARY:Gestern geplant',
-          'CATEGORIES:MYDAY-2026-07-04',
+          'CATEGORIES:FELIX-MYDAY-2026-07-04',
         ]),
         heute: heute,
       )!;
@@ -157,8 +168,10 @@ void main() {
     });
   });
 
-  test('mydayMarker formatiert mit führenden Nullen', () {
-    expect(Aufgabe.mydayMarker(DateTime(2026, 7, 5)), 'MYDAY-2026-07-05');
-    expect(Aufgabe.mydayMarker(DateTime(2026, 11, 23)), 'MYDAY-2026-11-23');
+  test('mydayMarker: FELIX-Präfix und führende Nullen', () {
+    expect(
+        Aufgabe.mydayMarker(DateTime(2026, 7, 5)), 'FELIX-MYDAY-2026-07-05');
+    expect(Aufgabe.mydayMarker(DateTime(2026, 11, 23)),
+        'FELIX-MYDAY-2026-11-23');
   });
 }

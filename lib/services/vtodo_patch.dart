@@ -94,18 +94,32 @@ IcalPatch favoritPatch(bool favorit) =>
           vtodo.categories = kategorien.isEmpty ? null : kategorien;
         });
 
-/// "Mein Tag" setzen/entfernen – Marker `MYDAY-<heute>` in CATEGORIES.
-/// Alte MYDAY-Marker (von früheren Tagen) werden dabei immer entfernt,
+/// "Mein Tag" setzen/entfernen – Marker `FELIX-MYDAY-<heute>` in CATEGORIES
+/// (identisch zur Python-Desktop-App). Alte MYDAY-Marker – auch in der
+/// alten Schreibweise ohne FELIX-Präfix – werden dabei immer entfernt,
 /// so verfällt die Markierung über Nacht von selbst.
 IcalPatch meinTagPatch(bool meinTag, {DateTime? heute}) =>
     (ical) => patcheVTodo(ical, (vtodo) {
           final kategorien = List<String>.from(vtodo.categories ?? const [])
-            ..removeWhere((k) => k.startsWith('MYDAY-'));
+            ..removeWhere((k) => k.contains('MYDAY-'));
           if (meinTag) {
             kategorien.add(Aufgabe.mydayMarker(heute ?? DateTime.now()));
           }
           vtodo.categories = kategorien.isEmpty ? null : kategorien;
         });
+
+/// Schritt zur eigenständigen Aufgabe höherstufen: Der Eltern-Bezug
+/// (RELATED-TO mit RELTYPE=PARENT oder ohne RELTYPE) wird entfernt
+/// (Design-Doc, Abschnitt 4).
+IcalPatch hochstufenPatch() => (ical) => patcheVTodo(ical, (vtodo) {
+      vtodo.properties.removeWhere((prop) {
+        if (prop.name != 'RELATED-TO') return false;
+        final reltype = prop.parameters['RELTYPE'];
+        return reltype == null ||
+            (reltype is RelationshipParameter &&
+                reltype.relationship == Relationship.parent);
+      });
+    });
 
 /// Erzeugt eine neue eindeutige UID für eine Aufgabe.
 String neueUid() {

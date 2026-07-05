@@ -18,7 +18,7 @@ final beispielIcal = [
   'SEQUENCE:4',
   'PRIORITY:5',
   'X-APPLE-SORT-ORDER:3072.0',
-  'CATEGORIES:FAVORITE,MYDAY-2026-07-05',
+  'CATEGORIES:FAVORITE,FELIX-MYDAY-2026-07-05',
   'RELATED-TO;RELTYPE=PARENT:eltern-uid',
   'X-FREMDES-FELD:unbekannt aber wichtig',
   'END:VTODO',
@@ -47,7 +47,7 @@ void main() {
       expect(ergebnis, contains('X-APPLE-SORT-ORDER:3072.0'));
       expect(ergebnis, contains('X-FREMDES-FELD:unbekannt aber wichtig'));
       expect(ergebnis, contains('FAVORITE'));
-      expect(ergebnis, contains('MYDAY-2026-07-05'));
+      expect(ergebnis, contains('FELIX-MYDAY-2026-07-05'));
       expect(ergebnis, contains('RELTYPE=PARENT'));
       expect(ergebnis, contains('eltern-uid'));
     });
@@ -133,8 +133,8 @@ void main() {
     });
 
     test('favoritPatch setzt FAVORITE auch ohne vorhandene CATEGORIES', () {
-      final ohneKategorien =
-          beispielIcal.replaceAll('CATEGORIES:FAVORITE,MYDAY-2026-07-05\r\n', '');
+      final ohneKategorien = beispielIcal.replaceAll(
+          'CATEGORIES:FAVORITE,FELIX-MYDAY-2026-07-05\r\n', '');
       final mitFavorit = favoritPatch(true)(ohneKategorien);
       expect(Aufgabe.ausICalendar(mitFavorit)!.favorit, isTrue);
     });
@@ -142,11 +142,31 @@ void main() {
     test('meinTagPatch erneuert den Marker mit heutigem Datum', () {
       final heute = DateTime(2026, 7, 6); // Beispiel trägt den 05.
       final ergebnis = meinTagPatch(true, heute: heute)(beispielIcal);
-      expect(ergebnis, contains('MYDAY-2026-07-06'));
+      expect(ergebnis, contains('FELIX-MYDAY-2026-07-06'));
       // Der alte Marker ist weg – es gibt genau einen.
       expect(ergebnis, isNot(contains('MYDAY-2026-07-05')));
       final aufgabe = Aufgabe.ausICalendar(ergebnis, heute: heute)!;
       expect(aufgabe.meinTag, isTrue);
+      expect(aufgabe.favorit, isTrue);
+    });
+
+    test('meinTagPatch entfernt auch Marker in alter Schreibweise', () {
+      final mitAltemMarker = beispielIcal.replaceAll(
+          'FELIX-MYDAY-2026-07-05', 'MYDAY-2026-07-04');
+      final ergebnis =
+          meinTagPatch(true, heute: DateTime(2026, 7, 6))(mitAltemMarker);
+      expect(ergebnis, isNot(contains('MYDAY-2026-07-04')));
+      expect(ergebnis, contains('FELIX-MYDAY-2026-07-06'));
+    });
+
+    test('hochstufenPatch entfernt nur den Eltern-Bezug', () {
+      final ergebnis = hochstufenPatch()(beispielIcal);
+      expect(ergebnis, isNot(contains('RELTYPE=PARENT')));
+      final aufgabe = Aufgabe.ausICalendar(ergebnis)!;
+      expect(aufgabe.parentUid, isNull);
+      expect(aufgabe.istSchritt, isFalse);
+      // Rest bleibt unangetastet.
+      expect(ergebnis, contains('X-APPLE-SORT-ORDER:3072.0'));
       expect(aufgabe.favorit, isTrue);
     });
 

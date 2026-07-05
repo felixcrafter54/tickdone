@@ -119,7 +119,12 @@ class Aufgabe {
     if (vtodo == null) return null;
 
     final kategorien = vtodo.categories ?? const <String>[];
-    final tagesMarker = mydayMarker(heute ?? DateTime.now());
+    // Die Python-Desktop-App schreibt FELIX-MYDAY-<datum> (Design-Doc,
+    // Abschnitt 6); die Mobile-Spec nannte MYDAY-<datum>. Beim Lesen
+    // akzeptieren wir beide Formen.
+    final tag = heute ?? DateTime.now();
+    final tagesMarker = mydayMarker(tag);
+    final altMarker = 'MYDAY-${_datumsTeil(tag)}';
 
     return Aufgabe(
       uid: vtodo.uid,
@@ -139,7 +144,8 @@ class Aufgabe {
       sortOrder: _parseSortOrder(
           vtodo.getProperty('X-APPLE-SORT-ORDER')?.textValue),
       favorit: kategorien.contains('FAVORITE'),
-      meinTag: kategorien.contains(tagesMarker),
+      meinTag: kategorien.contains(tagesMarker) ||
+          kategorien.contains(altMarker),
       erstellt: vtodo.created,
       etag: etag,
       href: href,
@@ -178,11 +184,14 @@ class Aufgabe {
     return puffer.toString();
   }
 
-  /// Der "Mein Tag"-Marker für ein Datum, z.B. MYDAY-2026-07-05.
-  static String mydayMarker(DateTime tag) {
+  /// Der "Mein Tag"-Marker für ein Datum, z.B. FELIX-MYDAY-2026-07-05
+  /// (identisch zur Python-Desktop-App, Design-Doc Abschnitt 6).
+  static String mydayMarker(DateTime tag) => 'FELIX-MYDAY-${_datumsTeil(tag)}';
+
+  static String _datumsTeil(DateTime tag) {
     final monat = tag.month.toString().padLeft(2, '0');
     final t = tag.day.toString().padLeft(2, '0');
-    return 'MYDAY-${tag.year}-$monat-$t';
+    return '${tag.year}-$monat-$t';
   }
 
   /// Manche Clients schreiben X-APPLE-SORT-ORDER als Kommazahl

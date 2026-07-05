@@ -141,6 +141,22 @@ class CalDavService {
     await client.deleteCalendar(liste);
   }
 
+  /// Aufgabe in eine andere Liste verschieben: unverändertes iCalendar
+  /// in die Ziel-Collection legen (If-None-Match: *), dann das Original
+  /// löschen. Erst nach erfolgreichem Anlegen wird gelöscht –
+  /// so geht bei einem Fehler nichts verloren.
+  Future<void> verschiebeAufgabe(Aufgabe aufgabe, Calendar ziel) async {
+    final dateiname = aufgabe.href?.pathSegments.lastOrNull ??
+        '${aufgabe.uid}.ics';
+    final zielHref = ziel.href.resolve(dateiname);
+    await client.webdavClient.put(
+      zielHref.toString(),
+      body: aufgabe.rohIcal,
+      ifNoneMatch: '*',
+    );
+    await loescheAufgabe(aufgabe);
+  }
+
   /// Einzelne Aufgabe löschen (DELETE mit If-Match).
   /// 404 gilt als Erfolg – dann war sie schon weg.
   Future<void> loescheAufgabe(Aufgabe aufgabe) async {
