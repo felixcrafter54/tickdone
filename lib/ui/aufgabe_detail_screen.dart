@@ -126,14 +126,15 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
         backgroundColor: TickdoneFarben.detailFlaeche,
         appBar: AppBar(
           backgroundColor: TickdoneFarben.detailFlaeche,
-          leading: widget.eingebettet
-              ? IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: 'Schließen',
-                  onPressed: _schliessen,
-                )
-              : null,
-          title: const Text('Aufgabe'),
+          automaticallyImplyLeading: !widget.eingebettet,
+          actions: [
+            if (widget.eingebettet)
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Schließen',
+                onPressed: _schliessen,
+              ),
+          ],
         ),
         body: const Center(
           child: Text('Diese Aufgabe existiert nicht mehr.'),
@@ -142,254 +143,163 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     }
 
     final schritte = appState.schritteVon(widget.uid);
-    final fortschritt = appState.fortschrittVon(widget.uid);
-    final farben = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: TickdoneFarben.detailFlaeche,
       appBar: AppBar(
         backgroundColor: TickdoneFarben.detailFlaeche,
+        // Kein Listenname mehr (MS-To-Do-Stil).
         automaticallyImplyLeading: !widget.eingebettet,
-        leading: widget.eingebettet
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Schließen (Esc)',
-                onPressed: _schliessen,
-              )
-            : null,
-        title: Text(appState.aktiveListe?.displayName ?? ''),
+        actions: [
+          if (widget.eingebettet)
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Schließen (Esc)',
+              onPressed: _schliessen,
+            ),
+        ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         children: [
-          // Titelzeile: abhaken + Titel bearbeiten
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              IconButton(
-                icon: Icon(
-                  aufgabe.erledigt
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: aufgabe.erledigt
-                      ? TickdoneFarben.erledigt
-                      : TickdoneFarben.textGedimmt,
-                  size: 28,
-                ),
-                tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
-                onPressed: () => context
-                    .read<AppState>()
-                    .setzeErledigt(widget.uid, !aufgabe.erledigt),
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _titelController,
-                  focusNode: _titelFokus,
-                  maxLines: null,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(
-                        decoration: aufgabe.erledigt
-                            ? TextDecoration.lineThrough
-                            : null,
-                        color: aufgabe.erledigt ? farben.outline : null,
-                      ),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Titel',
-                  ),
-                  onSubmitted: (wert) =>
-                      context.read<AppState>().setzeTitel(widget.uid, wert),
-                ),
-              ),
-            ],
+          // Karte 1: Titel + Schritte + "Nächster Schritt"
+          _Karte(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _titelZeile(aufgabe),
+                for (final schritt in schritte) _schrittZeile(schritt),
+                _schrittHinzufuegenZeile(),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
-
-          // Fälligkeit + Priorität (sofort speichern)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              InputChip(
-                avatar: const Icon(Icons.event, size: 18),
-                label: Text(aufgabe.faellig == null
-                    ? 'Fällig am …'
-                    : 'Fällig: ${_datum(aufgabe.faellig!)}'),
-                onPressed: () => _faelligWaehlen(aufgabe),
-                onDeleted: aufgabe.faellig == null
-                    ? null
-                    : () => context
-                        .read<AppState>()
-                        .setzeFaellig(widget.uid, null),
-                deleteButtonTooltipMessage: 'Fälligkeit entfernen',
-              ),
-              // "Mein Tag" umschalten – Marker verfällt über Nacht.
-              FilterChip(
-                avatar: aufgabe.meinTag
-                    ? null
-                    : const Icon(Icons.wb_sunny_outlined, size: 18),
-                label: const Text('Mein Tag'),
-                selected: aufgabe.meinTag,
-                onSelected: (wert) =>
-                    context.read<AppState>().setzeMeinTag(widget.uid, wert),
-              ),
-              // Stern = als wichtig markieren (hohe Priorität).
-              IconButton(
-                icon: aufgabe.wichtig
-                    ? const Icon(Icons.star, color: TickdoneFarben.favorit)
-                    : const Icon(Icons.star_border,
-                        color: TickdoneFarben.textGedimmt),
-                tooltip: aufgabe.wichtig
-                    ? 'Wichtig entfernen'
-                    : 'Als wichtig markieren',
-                onPressed: () => context
-                    .read<AppState>()
-                    .setzeWichtig(widget.uid, !aufgabe.wichtig),
-              ),
-            ],
-          ),
-
-          // Schritte
+          // "Mein Tag"
+          _Karte(child: _meinTagZeile(aufgabe)),
+          const SizedBox(height: 8),
+          // Fälligkeit
+          _Karte(child: _faelligZeile(aufgabe)),
+          const SizedBox(height: 8),
+          // Notiz
+          _Karte(child: _notizFeld()),
           const SizedBox(height: 16),
-          Text(
-            fortschritt == null
-                ? 'Schritte'
-                : 'Schritte (${fortschritt.erledigt} von '
-                    '${fortschritt.gesamt} erledigt)',
-            style: Theme.of(context).textTheme.titleMedium,
+          _fusszeile(aufgabe),
+        ],
+      ),
+    );
+  }
+
+  Widget _titelZeile(Aufgabe aufgabe) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        IconButton(
+          icon: Icon(
+            aufgabe.erledigt
+                ? Icons.check_circle
+                : Icons.radio_button_unchecked,
+            color: aufgabe.erledigt
+                ? TickdoneFarben.erledigt
+                : TickdoneFarben.textGedimmt,
+            size: 26,
           ),
-          for (final schritt in schritte)
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: IconButton(
-                icon: Icon(
-                  schritt.erledigt
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: schritt.erledigt
-                      ? TickdoneFarben.erledigt
-                      : TickdoneFarben.textGedimmt,
-                ),
-                tooltip: schritt.erledigt ? 'Wieder öffnen' : 'Erledigt',
-                onPressed: () => context
+          tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
+          onPressed: () =>
+              context.read<AppState>().setzeErledigt(widget.uid, !aufgabe.erledigt),
+        ),
+        Expanded(
+          child: TextField(
+            controller: _titelController,
+            focusNode: _titelFokus,
+            maxLines: null,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              decoration:
+                  aufgabe.erledigt ? TextDecoration.lineThrough : null,
+              color: aufgabe.erledigt
+                  ? TickdoneFarben.textSchwach
+                  : TickdoneFarben.text,
+            ),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              filled: false,
+              isCollapsed: true,
+              hintText: 'Titel',
+            ),
+            onSubmitted: (wert) =>
+                context.read<AppState>().setzeTitel(widget.uid, wert),
+          ),
+        ),
+        IconButton(
+          icon: aufgabe.wichtig
+              ? const Icon(Icons.star, color: TickdoneFarben.favorit)
+              : const Icon(Icons.star_border,
+                  color: TickdoneFarben.textGedimmt),
+          tooltip:
+              aufgabe.wichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
+          onPressed: () =>
+              context.read<AppState>().setzeWichtig(widget.uid, !aufgabe.wichtig),
+        ),
+      ],
+    );
+  }
+
+  Widget _schrittZeile(Aufgabe schritt) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(
+              schritt.erledigt
+                  ? Icons.check_circle
+                  : Icons.radio_button_unchecked,
+              color: schritt.erledigt
+                  ? TickdoneFarben.erledigt
+                  : TickdoneFarben.textGedimmt,
+              size: 20,
+            ),
+            tooltip: schritt.erledigt ? 'Wieder öffnen' : 'Erledigt',
+            onPressed: () => context
+                .read<AppState>()
+                .setzeErledigt(schritt.uid, !schritt.erledigt),
+          ),
+          Expanded(
+            child: Text(
+              schritt.titel,
+              style: schritt.erledigt
+                  ? const TextStyle(
+                      decoration: TextDecoration.lineThrough,
+                      color: TickdoneFarben.textSchwach,
+                    )
+                  : const TextStyle(color: TickdoneFarben.text),
+            ),
+          ),
+          PopupMenuButton<void Function()>(
+            icon: const Icon(Icons.more_vert,
+                size: 18, color: TickdoneFarben.textGedimmt),
+            tooltip: 'Schritt-Aktionen',
+            onSelected: (aktion) => aktion(),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: () => context
                     .read<AppState>()
                     .setzeErledigt(schritt.uid, !schritt.erledigt),
+                child: Text(schritt.erledigt
+                    ? 'Als offen markieren'
+                    : 'Als erledigt markieren'),
               ),
-              title: Text(
-                schritt.titel,
-                style: schritt.erledigt
-                    ? TextStyle(
-                        decoration: TextDecoration.lineThrough,
-                        color: farben.outline,
-                      )
-                    : null,
+              PopupMenuItem(
+                value: () =>
+                    context.read<AppState>().stufeSchrittHoch(schritt.uid),
+                child: const Text('Zur Aufgabe höherstufen'),
               ),
-              // Drei-Punkte-Menü je Schritt (Design-Doc, Abschnitt 4).
-              trailing: PopupMenuButton<void Function()>(
-                icon: const Icon(Icons.more_vert, size: 18),
-                tooltip: 'Schritt-Aktionen',
-                onSelected: (aktion) => aktion(),
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: () => context
-                        .read<AppState>()
-                        .setzeErledigt(schritt.uid, !schritt.erledigt),
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(schritt.erledigt
-                          ? Icons.radio_button_unchecked
-                          : Icons.check_circle_outline),
-                      title: Text(schritt.erledigt
-                          ? 'Als offen markieren'
-                          : 'Als erledigt markieren'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: () => context
-                        .read<AppState>()
-                        .stufeSchrittHoch(schritt.uid),
-                    child: const ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.upgrade),
-                      title: Text('Zur Aufgabe höherstufen'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: () => AufgabenScreen.loeschenBestaetigen(
-                        context, schritt),
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.delete_outline,
-                          color: farben.error),
-                      title: Text('Schritt löschen',
-                          style: TextStyle(color: farben.error)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Eingabezeile "Schritt hinzufügen" (Design-Doc, Abschnitt 4).
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: TextField(
-              controller: _schrittController,
-              decoration: const InputDecoration(
-                hintText: 'Schritt hinzufügen',
-                prefixIcon: Icon(Icons.radio_button_unchecked,
-                    color: TickdoneFarben.textSchwach),
-                isDense: true,
-              ),
-              onSubmitted: (_) => _schrittAnlegen(),
-            ),
-          ),
-
-          // Notiz (Auto-Save beim Verlassen des Feldes)
-          const SizedBox(height: 16),
-          Text('Notiz', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          TextField(
-            controller: _notizController,
-            focusNode: _notizFokus,
-            maxLines: null,
-            minLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Notiz hinzufügen …',
-            ),
-          ),
-
-          // Fußzeile: Erstellt-Zeit links, Löschen rechts
-          // (Design-Doc, Abschnitt 4).
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  aufgabe.erstellt == null
-                      ? ''
-                      : 'Erstellt ${relativeZeit(aufgabe.erstellt!)}',
-                  style: const TextStyle(
-                    color: TickdoneFarben.textGedimmt,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    color: TickdoneFarben.ueberfaellig),
-                tooltip: 'Aufgabe löschen',
-                onPressed: () async {
-                  final geloescht =
-                      await AufgabenScreen.loeschenBestaetigen(
-                          context, aufgabe);
-                  if (geloescht && context.mounted) {
-                    _schliessen();
-                  }
-                },
+              PopupMenuItem(
+                value: () =>
+                    AufgabenScreen.loeschenBestaetigen(context, schritt),
+                child: const Text('Schritt löschen',
+                    style: TextStyle(color: TickdoneFarben.ueberfaellig)),
               ),
             ],
           ),
@@ -398,9 +308,140 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     );
   }
 
-  String _datum(DateTime wert) {
-    final tag = wert.day.toString().padLeft(2, '0');
-    final monat = wert.month.toString().padLeft(2, '0');
-    return '$tag.$monat.${wert.year}';
+  Widget _schrittHinzufuegenZeile() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, top: 2),
+      child: Row(
+        children: [
+          const Icon(Icons.add, size: 20, color: TickdoneFarben.akzent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _schrittController,
+              style: const TextStyle(color: TickdoneFarben.akzent),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                filled: false,
+                isCollapsed: true,
+                hintText: 'Nächster Schritt',
+                hintStyle: TextStyle(color: TickdoneFarben.akzent),
+              ),
+              onSubmitted: (_) => _schrittAnlegen(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _meinTagZeile(Aufgabe aufgabe) {
+    final aktiv = aufgabe.meinTag;
+    return ListTile(
+      leading: Icon(Icons.wb_sunny_outlined,
+          color: aktiv ? TickdoneFarben.akzent : TickdoneFarben.textGedimmt),
+      title: Text(
+        aktiv ? 'Zu "Mein Tag" hinzugefügt' : 'Zu "Mein Tag" hinzufügen',
+        style: TextStyle(
+            color: aktiv ? TickdoneFarben.akzent : TickdoneFarben.text),
+      ),
+      trailing: aktiv
+          ? IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: 'Aus "Mein Tag" entfernen',
+              onPressed: () =>
+                  context.read<AppState>().setzeMeinTag(widget.uid, false),
+            )
+          : null,
+      onTap: aktiv
+          ? null
+          : () => context.read<AppState>().setzeMeinTag(widget.uid, true),
+    );
+  }
+
+  Widget _faelligZeile(Aufgabe aufgabe) {
+    final hat = aufgabe.faellig != null;
+    return ListTile(
+      leading: Icon(Icons.calendar_today_outlined,
+          color: hat ? TickdoneFarben.akzent : TickdoneFarben.textGedimmt),
+      title: Text(
+        hat ? 'Fällig: ${faelligText(aufgabe.faellig!)}'
+            : 'Fälligkeitsdatum hinzufügen',
+        style: TextStyle(
+            color: hat ? TickdoneFarben.akzent : TickdoneFarben.text),
+      ),
+      trailing: hat
+          ? IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: 'Termin entfernen',
+              onPressed: () =>
+                  context.read<AppState>().setzeFaellig(widget.uid, null),
+            )
+          : null,
+      onTap: () => _faelligWaehlen(aufgabe),
+    );
+  }
+
+  Widget _notizFeld() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: TextField(
+        controller: _notizController,
+        focusNode: _notizFokus,
+        maxLines: null,
+        minLines: 3,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          filled: false,
+          hintText: 'Notiz hinzufügen …',
+        ),
+      ),
+    );
+  }
+
+  Widget _fusszeile(Aufgabe aufgabe) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            aufgabe.erstellt == null
+                ? ''
+                : 'Erstellt ${relativeZeit(aufgabe.erstellt!)}',
+            style: const TextStyle(
+                color: TickdoneFarben.textGedimmt, fontSize: 12),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline,
+              color: TickdoneFarben.ueberfaellig),
+          tooltip: 'Aufgabe löschen',
+          onPressed: () async {
+            final geloescht =
+                await AufgabenScreen.loeschenBestaetigen(context, aufgabe);
+            if (geloescht && context.mounted) _schliessen();
+          },
+        ),
+      ],
+    );
   }
 }
+
+/// Rundes Karten-Panel im Detailbereich (MS-To-Do-Stil).
+class _Karte extends StatelessWidget {
+  const _Karte({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: TickdoneFarben.flaeche,
+        borderRadius: BorderRadius.circular(tickdoneRadius),
+        border: Border.all(color: TickdoneFarben.rahmen),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: child,
+    );
+  }
+}
+

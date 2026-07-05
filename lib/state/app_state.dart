@@ -129,6 +129,13 @@ class AppState extends ChangeNotifier {
   /// gezeigte Aufgabe. Auf dem Handy ungenutzt (dort Push-Navigation).
   String? aktiveAufgabeUid;
 
+  /// Aufgabe, über der der Mauszeiger schwebt (Desktop). Tastenkürzel
+  /// wirken darauf. Bewusst OHNE notifyListeners – reine Ziel-Info,
+  /// die kein Neuzeichnen braucht.
+  String? hoverAufgabeUid;
+
+  void setzeHover(String? uid) => hoverAufgabeUid = uid;
+
   /// Aufgabe für den Detailbereich wählen (null schließt ihn).
   void waehleAufgabe(String? uid) {
     if (aktiveAufgabeUid == uid) return;

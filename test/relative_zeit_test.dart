@@ -1,4 +1,5 @@
-// Tests für die relativen Zeitangaben (Design-Doc, Abschnitt 8).
+// Tests für die relativen Zeitangaben (Design-Doc, Abschnitt 8)
+// und das kurze Fälligkeitsdatum (MS-To-Do-Stil).
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:tickdone/ui/relative_zeit.dart';
@@ -6,6 +7,25 @@ import 'package:tickdone/ui/relative_zeit.dart';
 void main() {
   // Fester Bezugspunkt: Sonntag, 5. Juli 2026, 15:00.
   final jetzt = DateTime(2026, 7, 5, 15);
+
+  group('faelligText', () {
+    test('Gestern / Heute / Morgen', () {
+      expect(faelligText(DateTime(2026, 7, 4), jetzt: jetzt), 'Gestern');
+      expect(faelligText(DateTime(2026, 7, 5), jetzt: jetzt), 'Heute');
+      expect(faelligText(DateTime(2026, 7, 6), jetzt: jetzt), 'Morgen');
+    });
+
+    test('gleiches Jahr: Wochentag + Tag + Monat ohne Jahr', () {
+      // 7. Juli 2026 ist ein Dienstag.
+      expect(faelligText(DateTime(2026, 7, 7), jetzt: jetzt), 'Di, 7. Jul');
+    });
+
+    test('anderes Jahr: mit Jahresangabe', () {
+      // 7. Januar 2027 ist ein Donnerstag.
+      expect(faelligText(DateTime(2027, 1, 7), jetzt: jetzt),
+          'Do, 7. Jan 2027');
+    });
+  });
 
   test('unter einer Minute: gerade eben', () {
     expect(

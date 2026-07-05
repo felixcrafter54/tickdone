@@ -98,6 +98,19 @@ ThemeData tickdoneTheme() {
         borderRadius: BorderRadius.all(Radius.circular(tickdoneRadius)),
       ),
     ),
+    // Material-Menü (MenuAnchor) fürs Kontextmenü: dunkle Fläche mit Rahmen.
+    menuTheme: MenuThemeData(
+      style: MenuStyle(
+        backgroundColor:
+            const WidgetStatePropertyAll(TickdoneFarben.flaecheHover),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(tickdoneRadius),
+            side: const BorderSide(color: TickdoneFarben.rahmen),
+          ),
+        ),
+      ),
+    ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
       backgroundColor: TickdoneFarben.akzent,
       foregroundColor: Colors.white,

@@ -89,8 +89,10 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
 
   AppState get _app => context.read<AppState>();
 
-  void _mitAktiver(void Function(String uid) aktion) {
-    final uid = _app.aktiveAufgabeUid;
+  /// Tastenkürzel wirken auf die Aufgabe unter dem Mauszeiger, sonst auf
+  /// die im Detailbereich gewählte.
+  void _mitZiel(void Function(String uid) aktion) {
+    final uid = _app.hoverAufgabeUid ?? _app.aktiveAufgabeUid;
     if (uid != null) aktion(uid);
   }
 
@@ -118,7 +120,7 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
         actions: <Type, Action<Intent>>{
           _ErledigtIntent: CallbackAction<_ErledigtIntent>(
             onInvoke: (_) {
-              _mitAktiver((uid) {
+              _mitZiel((uid) {
                 final a = _app.aufgabeMitUid(uid);
                 if (a != null) _app.setzeErledigt(uid, !a.erledigt);
               });
@@ -127,7 +129,7 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
           ),
           _MeinTagIntent: CallbackAction<_MeinTagIntent>(
             onInvoke: (_) {
-              _mitAktiver((uid) {
+              _mitZiel((uid) {
                 final a = _app.aufgabeMitUid(uid);
                 if (a != null) _app.setzeMeinTag(uid, !a.meinTag);
               });
@@ -136,7 +138,7 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
           ),
           _LoeschenIntent: CallbackAction<_LoeschenIntent>(
             onInvoke: (_) {
-              _mitAktiver((uid) {
+              _mitZiel((uid) {
                 final a = _app.aufgabeMitUid(uid);
                 if (a != null) AufgabenScreen.loeschenBestaetigen(context, a);
               });

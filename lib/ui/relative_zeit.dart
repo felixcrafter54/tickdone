@@ -49,3 +49,38 @@ String relativeZeit(DateTime zeitpunkt, {DateTime? jetzt}) {
   }
   return '${lokal.day}. ${_monate[lokal.month - 1]} ${lokal.year}';
 }
+
+const _wochentageKurz = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+const _monateKurz = [
+  'Jan',
+  'Feb',
+  'Mär',
+  'Apr',
+  'Mai',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Okt',
+  'Nov',
+  'Dez',
+];
+
+/// Kurzes Fälligkeitsdatum (MS-To-Do-Stil):
+/// Gestern / Heute / Morgen, sonst "Di, 7. Jul" (Jahr nur bei Abweichung).
+String faelligText(DateTime faellig, {DateTime? jetzt}) {
+  final referenz = jetzt ?? DateTime.now();
+  final tag = DateTime(faellig.year, faellig.month, faellig.day);
+  final heute = DateTime(referenz.year, referenz.month, referenz.day);
+  final diff = tag.difference(heute).inDays;
+
+  if (diff == 0) return 'Heute';
+  if (diff == 1) return 'Morgen';
+  if (diff == -1) return 'Gestern';
+
+  final wochentag = _wochentageKurz[tag.weekday - 1];
+  final monat = _monateKurz[tag.month - 1];
+  final basis = '$wochentag, ${tag.day}. $monat';
+  return tag.year == heute.year ? basis : '$basis ${tag.year}';
+}
