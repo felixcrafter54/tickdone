@@ -56,6 +56,40 @@ class AufgabenScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(appState.aktiveListe?.displayName ?? 'Aufgaben'),
+        actions: [
+          // Filter: alle / offen / erledigt / Favoriten
+          PopupMenuButton<AufgabenFilter>(
+            icon: Icon(appState.filter == AufgabenFilter.alle
+                ? Icons.filter_list
+                : Icons.filter_list_alt),
+            tooltip: 'Filtern',
+            onSelected: (wert) =>
+                context.read<AppState>().setzeFilter(wert),
+            itemBuilder: (_) => [
+              for (final wert in AufgabenFilter.values)
+                CheckedPopupMenuItem(
+                  value: wert,
+                  checked: appState.filter == wert,
+                  child: Text(wert.anzeige),
+                ),
+            ],
+          ),
+          // Sortierung: manuell / Fälligkeit / Priorität / Titel / Erstellt
+          PopupMenuButton<Sortierung>(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Sortieren',
+            onSelected: (wert) =>
+                context.read<AppState>().setzeSortierung(wert),
+            itemBuilder: (_) => [
+              for (final wert in Sortierung.values)
+                CheckedPopupMenuItem(
+                  value: wert,
+                  checked: appState.sortierung == wert,
+                  child: Text(wert.anzeige),
+                ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -145,9 +179,18 @@ class _AufgabenZeile extends StatelessWidget {
             : null,
       ),
       subtitle: _untertitel(),
-      trailing: aufgabe.favorit
-          ? Icon(Icons.star, color: Colors.amber.shade600)
-          : null,
+      // Stern antippen = Favorit umschalten (Marker in CATEGORIES).
+      trailing: IconButton(
+        icon: aufgabe.favorit
+            ? Icon(Icons.star, color: Colors.amber.shade600)
+            : Icon(Icons.star_border, color: farben.outline),
+        tooltip: aufgabe.favorit
+            ? 'Favorit entfernen'
+            : 'Als Favorit markieren',
+        onPressed: () => context
+            .read<AppState>()
+            .setzeFavorit(aufgabe.uid, !aufgabe.favorit),
+      ),
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(

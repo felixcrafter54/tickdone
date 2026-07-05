@@ -174,13 +174,27 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                   }
                 },
               ),
-              if (aufgabe.meinTag)
-                const Chip(
-                  avatar: Icon(Icons.wb_sunny_outlined, size: 18),
-                  label: Text('Mein Tag'),
-                ),
-              if (aufgabe.favorit)
-                Icon(Icons.star, color: Colors.amber.shade600),
+              // "Mein Tag" umschalten – Marker verfällt über Nacht.
+              FilterChip(
+                avatar: aufgabe.meinTag
+                    ? null
+                    : const Icon(Icons.wb_sunny_outlined, size: 18),
+                label: const Text('Mein Tag'),
+                selected: aufgabe.meinTag,
+                onSelected: (wert) =>
+                    context.read<AppState>().setzeMeinTag(widget.uid, wert),
+              ),
+              IconButton(
+                icon: aufgabe.favorit
+                    ? Icon(Icons.star, color: Colors.amber.shade600)
+                    : Icon(Icons.star_border, color: farben.outline),
+                tooltip: aufgabe.favorit
+                    ? 'Favorit entfernen'
+                    : 'Als Favorit markieren',
+                onPressed: () => context
+                    .read<AppState>()
+                    .setzeFavorit(widget.uid, !aufgabe.favorit),
+              ),
             ],
           ),
 

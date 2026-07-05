@@ -122,6 +122,41 @@ void main() {
     });
   });
 
+  group('Marker-Patches (Favorit, Mein Tag)', () {
+    test('favoritPatch entfernt nur FAVORITE, andere Kategorien bleiben', () {
+      final ohneFavorit = favoritPatch(false)(beispielIcal);
+      final aufgabe = Aufgabe.ausICalendar(ohneFavorit,
+          heute: DateTime(2026, 7, 5))!;
+      expect(aufgabe.favorit, isFalse);
+      // Der MYDAY-Marker bleibt unangetastet.
+      expect(aufgabe.meinTag, isTrue);
+    });
+
+    test('favoritPatch setzt FAVORITE auch ohne vorhandene CATEGORIES', () {
+      final ohneKategorien =
+          beispielIcal.replaceAll('CATEGORIES:FAVORITE,MYDAY-2026-07-05\r\n', '');
+      final mitFavorit = favoritPatch(true)(ohneKategorien);
+      expect(Aufgabe.ausICalendar(mitFavorit)!.favorit, isTrue);
+    });
+
+    test('meinTagPatch erneuert den Marker mit heutigem Datum', () {
+      final heute = DateTime(2026, 7, 6); // Beispiel trägt den 05.
+      final ergebnis = meinTagPatch(true, heute: heute)(beispielIcal);
+      expect(ergebnis, contains('MYDAY-2026-07-06'));
+      // Der alte Marker ist weg – es gibt genau einen.
+      expect(ergebnis, isNot(contains('MYDAY-2026-07-05')));
+      final aufgabe = Aufgabe.ausICalendar(ergebnis, heute: heute)!;
+      expect(aufgabe.meinTag, isTrue);
+      expect(aufgabe.favorit, isTrue);
+    });
+
+    test('meinTagPatch(false) entfernt alle MYDAY-Marker', () {
+      final ergebnis = meinTagPatch(false)(beispielIcal);
+      expect(ergebnis, isNot(contains('MYDAY-')));
+      expect(ergebnis, contains('FAVORITE'));
+    });
+  });
+
   group('neuesVTodoIcal', () {
     test('enthält Pflichtfelder und lässt sich parsen', () {
       final ical = neuesVTodoIcal(

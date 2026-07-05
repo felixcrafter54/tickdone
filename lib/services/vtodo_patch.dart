@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:enough_icalendar/enough_icalendar.dart';
 
+import '../models/aufgabe.dart';
+
 /// Eine Änderung am Roh-iCalendar einer Aufgabe: nimmt den Text vom Server
 /// und liefert den geänderten Text. Als Funktion, damit sie bei einem
 /// ETag-Konflikt (412) auf den frisch geholten Stand erneut angewendet
@@ -79,6 +81,31 @@ IcalPatch prioritaetPatch(int prioritaet) => (ical) => patcheVTodo(
 /// Fälligkeit setzen oder (mit null) entfernen.
 IcalPatch faelligPatch(DateTime? datum) =>
     (ical) => patcheVTodo(ical, (vtodo) => vtodo.due = datum);
+
+/// Favorit setzen/entfernen – über den Marker FAVORITE in CATEGORIES
+/// (Spec, Abschnitt 2). Andere Kategorien bleiben unangetastet.
+IcalPatch favoritPatch(bool favorit) =>
+    (ical) => patcheVTodo(ical, (vtodo) {
+          final kategorien = List<String>.from(vtodo.categories ?? const [])
+            ..removeWhere((k) => k == 'FAVORITE');
+          if (favorit) {
+            kategorien.add('FAVORITE');
+          }
+          vtodo.categories = kategorien.isEmpty ? null : kategorien;
+        });
+
+/// "Mein Tag" setzen/entfernen – Marker `MYDAY-<heute>` in CATEGORIES.
+/// Alte MYDAY-Marker (von früheren Tagen) werden dabei immer entfernt,
+/// so verfällt die Markierung über Nacht von selbst.
+IcalPatch meinTagPatch(bool meinTag, {DateTime? heute}) =>
+    (ical) => patcheVTodo(ical, (vtodo) {
+          final kategorien = List<String>.from(vtodo.categories ?? const [])
+            ..removeWhere((k) => k.startsWith('MYDAY-'));
+          if (meinTag) {
+            kategorien.add(Aufgabe.mydayMarker(heute ?? DateTime.now()));
+          }
+          vtodo.categories = kategorien.isEmpty ? null : kategorien;
+        });
 
 /// Erzeugt eine neue eindeutige UID für eine Aufgabe.
 String neueUid() {

@@ -5,6 +5,29 @@ import '../models/aufgabe.dart';
 import '../services/caldav_service.dart';
 import '../services/vtodo_patch.dart';
 
+/// Sortierung der Aufgabenliste (Spec, Abschnitt 3).
+enum Sortierung {
+  manuell('Manuell'),
+  faelligkeit('Fälligkeit'),
+  prioritaet('Priorität'),
+  titel('Titel'),
+  erstellt('Erstellt');
+
+  const Sortierung(this.anzeige);
+  final String anzeige;
+}
+
+/// Filter der Aufgabenliste (Spec, Abschnitt 3).
+enum AufgabenFilter {
+  alle('Alle'),
+  offen('Offen'),
+  erledigt('Erledigt'),
+  favoriten('Favoriten');
+
+  const AufgabenFilter(this.anzeige);
+  final String anzeige;
+}
+
 /// Zentraler App-Zustand: Verbindung und geladene Aufgabenlisten.
 ///
 /// Bewusst einfach gehalten: EIN ChangeNotifier, den `provider` der
@@ -70,10 +93,61 @@ class AppState extends ChangeNotifier {
   bool aufgabenLaden = false;
   String? aufgabenFehler;
 
-  /// Nur die Wurzel-Aufgaben – Schritte (Subtasks) erscheinen erst
-  /// in der Detailansicht (Spec, Abschnitt 3).
-  List<Aufgabe> get wurzelAufgaben =>
-      aufgaben.where((a) => !a.istSchritt).toList();
+  Sortierung sortierung = Sortierung.manuell;
+  AufgabenFilter filter = AufgabenFilter.alle;
+
+  void setzeSortierung(Sortierung neue) {
+    sortierung = neue;
+    notifyListeners();
+  }
+
+  void setzeFilter(AufgabenFilter neuer) {
+    filter = neuer;
+    notifyListeners();
+  }
+
+  /// Nur die Wurzel-Aufgaben, gefiltert und sortiert – Schritte (Subtasks)
+  /// erscheinen erst in der Detailansicht (Spec, Abschnitt 3).
+  List<Aufgabe> get wurzelAufgaben {
+    final gefiltert = aufgaben.where((a) {
+      if (a.istSchritt) return false;
+      return switch (filter) {
+        AufgabenFilter.alle => true,
+        AufgabenFilter.offen => !a.erledigt,
+        AufgabenFilter.erledigt => a.erledigt,
+        AufgabenFilter.favoriten => a.favorit,
+      };
+    }).toList();
+    gefiltert.sort(_vergleicher(sortierung));
+    return gefiltert;
+  }
+
+  /// Vergleicher je Sortierung; fehlende Werte immer ans Ende.
+  static int Function(Aufgabe, Aufgabe) _vergleicher(Sortierung sortierung) {
+    int fehlendeAnsEnde<T>(T? a, T? b, int Function(T, T) vergleich) {
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return vergleich(a, b);
+    }
+
+    return switch (sortierung) {
+      Sortierung.manuell => (a, b) =>
+          fehlendeAnsEnde(a.sortOrder, b.sortOrder, (x, y) => x.compareTo(y)),
+      Sortierung.faelligkeit => (a, b) =>
+          fehlendeAnsEnde(a.faellig, b.faellig, (x, y) => x.compareTo(y)),
+      // 0 = keine Priorität gilt als fehlend, 1 (hoch) kommt zuerst.
+      Sortierung.prioritaet => (a, b) => fehlendeAnsEnde(
+          a.prioritaet == 0 ? null : a.prioritaet,
+          b.prioritaet == 0 ? null : b.prioritaet,
+          (x, y) => x.compareTo(y)),
+      Sortierung.titel => (a, b) =>
+          a.titel.toLowerCase().compareTo(b.titel.toLowerCase()),
+      // Neueste zuerst.
+      Sortierung.erstellt => (a, b) =>
+          fehlendeAnsEnde(a.erstellt, b.erstellt, (x, y) => y.compareTo(x)),
+    };
+  }
 
   /// Aufgabe per UID – null, wenn sie (nach einem Neuladen) nicht mehr da ist.
   Aufgabe? aufgabeMitUid(String uid) =>
@@ -182,6 +256,23 @@ class AppState extends ChangeNotifier {
             ? a.kopieMit(faelligEntfernen: true)
             : a.kopieMit(faellig: datum),
         patch: faelligPatch(datum),
+      );
+
+  /// Favorit setzen/entfernen (sofort speichern).
+  Future<void> setzeFavorit(String uid, bool favorit) =>
+      _aendereUndSpeichere(
+        uid,
+        lokal: (a) => a.kopieMit(favorit: favorit),
+        patch: favoritPatch(favorit),
+      );
+
+  /// "Mein Tag" setzen/entfernen (sofort speichern).
+  /// Der Marker trägt das heutige Datum und verfällt über Nacht.
+  Future<void> setzeMeinTag(String uid, bool meinTag) =>
+      _aendereUndSpeichere(
+        uid,
+        lokal: (a) => a.kopieMit(meinTag: meinTag),
+        patch: meinTagPatch(meinTag),
       );
 
   /// Neue Aufgabe (oder mit [parentUid] einen Schritt) anlegen.
