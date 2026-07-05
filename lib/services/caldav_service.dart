@@ -45,14 +45,18 @@ class CalDavService {
   }) async {
     trennen();
     final basis = _normalisiereUrl(serverUrl);
+    // Protokoll aller Versuche – landet bei Misserfolg in der Fehlermeldung,
+    // damit man sieht, welcher Kandidat woran gescheitert ist.
+    final diagnose = <String>[];
+
     final kandidaten = <String>[basis];
-    final wellKnownZiel = await _loeseWellKnownAuf(basis, benutzer, passwort);
+    final wellKnownZiel =
+        await _loeseWellKnownAuf(basis, benutzer, passwort, diagnose);
     if (wellKnownZiel != null && !kandidaten.contains(wellKnownZiel)) {
       kandidaten.add(wellKnownZiel);
     }
     kandidaten.addAll(['$basis/caldav', '$basis/radicale']);
 
-    Object? letzterFehler;
     for (final url in kandidaten) {
       try {
         _client = await CalDavClient.connect(
@@ -69,13 +73,17 @@ class CalDavService {
           throw Exception('Anmeldung fehlgeschlagen: '
               'Benutzername oder Passwort ist falsch.');
         }
-        letzterFehler = fehler;
+        diagnose.add('$url → $fehler');
+      } on DioException catch (fehler) {
+        final status = fehler.response?.statusCode;
+        diagnose.add(
+            '$url → ${status != null ? 'HTTP $status' : fehler.type.name}');
       } catch (fehler) {
-        letzterFehler = fehler;
+        diagnose.add('$url → $fehler');
       }
     }
-    throw Exception('Keine CalDAV-Verbindung zu "$basis" möglich. '
-        'Letzter Fehler: $letzterFehler');
+    throw Exception('Keine CalDAV-Verbindung zu "$basis" möglich.\n'
+        'Versuchte Wege:\n${diagnose.map((z) => '  $z').join('\n')}');
   }
 
   /// Lädt alle Collections des Nutzers und filtert auf solche,
@@ -101,36 +109,54 @@ class CalDavService {
   ///
   /// Mit Zugangsdaten, weil manche Server (z.B. hinter einem Auth-Proxy)
   /// schon auf .well-known ein 401 schicken statt direkt umzuleiten.
-  Future<String?> _loeseWellKnownAuf(
-      String basis, String benutzer, String passwort) async {
+  /// Erlaubt der Server kein GET (405), wird PROPFIND probiert.
+  Future<String?> _loeseWellKnownAuf(String basis, String benutzer,
+      String passwort, List<String> diagnose) async {
     final dio = Dio(BaseOptions(
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       followRedirects: false,
-      // 3xx nicht als Fehler werten – genau die wollen wir ja sehen.
-      validateStatus: (status) => status != null && status < 400,
+      // Nichts als Fehler werten – wir wollen den Status selbst auswerten.
+      validateStatus: (status) => status != null,
       headers: {
         'Authorization':
             'Basic ${base64Encode(utf8.encode('$benutzer:$passwort'))}',
       },
     ));
     final wellKnownUrl = '$basis/.well-known/caldav';
+    const redirects = {301, 302, 307, 308};
     try {
-      final antwort = await dio.get<void>(wellKnownUrl);
-      const redirects = {301, 302, 307, 308};
-      if (redirects.contains(antwort.statusCode)) {
+      var antwort = await dio.get<void>(wellKnownUrl);
+      var status = antwort.statusCode ?? 0;
+
+      // Manche Server erlauben auf .well-known kein GET,
+      // leiten aber bei PROPFIND um.
+      if (status == 405) {
+        antwort = await dio.request<void>(
+          wellKnownUrl,
+          options: Options(method: 'PROPFIND', headers: {'Depth': '0'}),
+        );
+        status = antwort.statusCode ?? 0;
+      }
+
+      if (redirects.contains(status)) {
         final ziel = antwort.headers.value('location');
         if (ziel != null && ziel.isNotEmpty) {
           final aufgeloest = Uri.parse('$basis/').resolve(ziel).toString();
+          diagnose.add('.well-known/caldav → HTTP $status nach $aufgeloest');
           return _normalisiereUrl(aufgeloest);
         }
+        diagnose.add('.well-known/caldav → HTTP $status ohne Location');
+        return null;
       }
       // 2xx ohne Redirect: .well-known ist selbst der Endpunkt.
-      if (antwort.statusCode != null && antwort.statusCode! < 300) {
+      if (status >= 200 && status < 300) {
+        diagnose.add('.well-known/caldav → HTTP $status (direkter Endpunkt)');
         return wellKnownUrl;
       }
-    } catch (_) {
-      // Kein .well-known vorhanden – dann eben ohne diesen Kandidaten.
+      diagnose.add('.well-known/caldav → HTTP $status (kein Redirect)');
+    } catch (fehler) {
+      diagnose.add('.well-known/caldav → $fehler');
     } finally {
       dio.close();
     }
