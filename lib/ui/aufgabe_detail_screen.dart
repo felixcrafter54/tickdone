@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../models/aufgabe.dart';
 import '../state/app_state.dart';
+import 'app_theme.dart';
 import 'aufgaben_screen.dart';
+import 'relative_zeit.dart';
 
 /// Detailansicht einer Aufgabe: Schritte, Fälligkeit, Priorität, Notiz.
 ///
@@ -25,6 +27,7 @@ class AufgabeDetailScreen extends StatefulWidget {
 class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
   late final TextEditingController _titelController;
   late final TextEditingController _notizController;
+  final TextEditingController _schrittController = TextEditingController();
   final FocusNode _titelFokus = FocusNode();
   final FocusNode _notizFokus = FocusNode();
 
@@ -57,7 +60,18 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     _notizFokus.dispose();
     _titelController.dispose();
     _notizController.dispose();
+    _schrittController.dispose();
     super.dispose();
+  }
+
+  /// Neuen Schritt aus der Eingabezeile anlegen (Design-Doc, Abschnitt 4).
+  Future<void> _schrittAnlegen() async {
+    final titel = _schrittController.text.trim();
+    if (titel.isEmpty) return;
+    _schrittController.clear();
+    await context
+        .read<AppState>()
+        .erstelleAufgabe(titel, parentUid: widget.uid);
   }
 
   Future<void> _faelligWaehlen(Aufgabe aufgabe) async {
@@ -91,21 +105,10 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     final farben = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: TickdoneFarben.detailFlaeche,
       appBar: AppBar(
+        backgroundColor: TickdoneFarben.detailFlaeche,
         title: Text(appState.aktiveListe?.displayName ?? ''),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Aufgabe löschen',
-            onPressed: () async {
-              final geloescht = await AufgabenScreen.loeschenBestaetigen(
-                  context, aufgabe);
-              if (geloescht && context.mounted) {
-                Navigator.of(context).pop();
-              }
-            },
-          ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -119,7 +122,9 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                   aufgabe.erledigt
                       ? Icons.check_circle
                       : Icons.radio_button_unchecked,
-                  color: aufgabe.erledigt ? farben.primary : farben.outline,
+                  color: aufgabe.erledigt
+                      ? TickdoneFarben.erledigt
+                      : TickdoneFarben.textGedimmt,
                   size: 28,
                 ),
                 tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
@@ -185,8 +190,9 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
               // Stern = als wichtig markieren (hohe Priorität).
               IconButton(
                 icon: aufgabe.wichtig
-                    ? Icon(Icons.star, color: Colors.amber.shade600)
-                    : Icon(Icons.star_border, color: farben.outline),
+                    ? const Icon(Icons.star, color: TickdoneFarben.favorit)
+                    : const Icon(Icons.star_border,
+                        color: TickdoneFarben.textGedimmt),
                 tooltip: aufgabe.wichtig
                     ? 'Wichtig entfernen'
                     : 'Als wichtig markieren',
@@ -199,26 +205,12 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
 
           // Schritte
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  fortschritt == null
-                      ? 'Schritte'
-                      : 'Schritte (${fortschritt.erledigt} von '
-                          '${fortschritt.gesamt} erledigt)',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              TextButton.icon(
-                icon: const Icon(Icons.add),
-                label: const Text('Schritt'),
-                onPressed: () => AufgabenScreen.neueAufgabeDialog(
-                  context,
-                  parentUid: widget.uid,
-                ),
-              ),
-            ],
+          Text(
+            fortschritt == null
+                ? 'Schritte'
+                : 'Schritte (${fortschritt.erledigt} von '
+                    '${fortschritt.gesamt} erledigt)',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
           for (final schritt in schritte)
             ListTile(
@@ -229,7 +221,9 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                   schritt.erledigt
                       ? Icons.check_circle
                       : Icons.radio_button_unchecked,
-                  color: schritt.erledigt ? farben.primary : farben.outline,
+                  color: schritt.erledigt
+                      ? TickdoneFarben.erledigt
+                      : TickdoneFarben.textGedimmt,
                 ),
                 tooltip: schritt.erledigt ? 'Wieder öffnen' : 'Erledigt',
                 onPressed: () => context
@@ -290,6 +284,21 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
               ),
             ),
 
+          // Eingabezeile "Schritt hinzufügen" (Design-Doc, Abschnitt 4).
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: TextField(
+              controller: _schrittController,
+              decoration: const InputDecoration(
+                hintText: 'Schritt hinzufügen',
+                prefixIcon: Icon(Icons.radio_button_unchecked,
+                    color: TickdoneFarben.textSchwach),
+                isDense: true,
+              ),
+              onSubmitted: (_) => _schrittAnlegen(),
+            ),
+          ),
+
           // Notiz (Auto-Save beim Verlassen des Feldes)
           const SizedBox(height: 16),
           Text('Notiz', style: Theme.of(context).textTheme.titleMedium),
@@ -300,9 +309,40 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
             maxLines: null,
             minLines: 3,
             decoration: const InputDecoration(
-              border: OutlineInputBorder(),
               hintText: 'Notiz hinzufügen …',
             ),
+          ),
+
+          // Fußzeile: Erstellt-Zeit links, Löschen rechts
+          // (Design-Doc, Abschnitt 4).
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  aufgabe.erstellt == null
+                      ? ''
+                      : 'Erstellt ${relativeZeit(aufgabe.erstellt!)}',
+                  style: const TextStyle(
+                    color: TickdoneFarben.textGedimmt,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline,
+                    color: TickdoneFarben.ueberfaellig),
+                tooltip: 'Aufgabe löschen',
+                onPressed: () async {
+                  final geloescht =
+                      await AufgabenScreen.loeschenBestaetigen(
+                          context, aufgabe);
+                  if (geloescht && context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+            ],
           ),
         ],
       ),
