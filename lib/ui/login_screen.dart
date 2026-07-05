@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
-import 'listen_screen.dart';
+import 'haupt_screen.dart';
 
 /// Anmeldebildschirm: Server-URL, Benutzername, Passwort.
 ///
@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     if (erfolgreich && mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ListenScreen()),
+        MaterialPageRoute(builder: (_) => const HauptScreen()),
       );
     }
   }

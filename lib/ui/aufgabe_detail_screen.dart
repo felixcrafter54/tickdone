@@ -14,11 +14,19 @@ import 'relative_zeit.dart';
 /// ETag-Konflikte), Priorität und Termin sofort. Alles optimistisch,
 /// ohne die Liste neu zu laden.
 class AufgabeDetailScreen extends StatefulWidget {
-  const AufgabeDetailScreen({super.key, required this.uid});
+  const AufgabeDetailScreen({
+    super.key,
+    required this.uid,
+    this.eingebettet = false,
+  });
 
   /// UID statt Objekt, damit die Ansicht immer den frischen Stand
   /// aus dem AppState zeigt.
   final String uid;
+
+  /// true im Drei-Spalten-Layout: Schließen/Löschen setzt die
+  /// Detail-Auswahl im State zurück, statt eine Route zu poppen.
+  final bool eingebettet;
 
   @override
   State<AufgabeDetailScreen> createState() => _AufgabeDetailScreenState();
@@ -55,6 +63,18 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
   }
 
   @override
+  void didUpdateWidget(AufgabeDetailScreen alt) {
+    super.didUpdateWidget(alt);
+    // Im Drei-Spalten-Layout bleibt dasselbe State-Objekt bestehen, wenn
+    // eine andere Aufgabe gewählt wird – dann Textfelder neu befüllen.
+    if (alt.uid != widget.uid) {
+      final aufgabe = context.read<AppState>().aufgabeMitUid(widget.uid);
+      _titelController.text = aufgabe?.titel ?? '';
+      _notizController.text = aufgabe?.notiz ?? '';
+    }
+  }
+
+  @override
   void dispose() {
     _titelFokus.dispose();
     _notizFokus.dispose();
@@ -62,6 +82,16 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     _notizController.dispose();
     _schrittController.dispose();
     super.dispose();
+  }
+
+  /// Detailansicht schließen: eingebettet die Auswahl zurücksetzen,
+  /// sonst die Route poppen.
+  void _schliessen() {
+    if (widget.eingebettet) {
+      context.read<AppState>().waehleAufgabe(null);
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   /// Neuen Schritt aus der Eingabezeile anlegen (Design-Doc, Abschnitt 4).
@@ -93,7 +123,18 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     final aufgabe = appState.aufgabeMitUid(widget.uid);
     if (aufgabe == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Aufgabe')),
+        backgroundColor: TickdoneFarben.detailFlaeche,
+        appBar: AppBar(
+          backgroundColor: TickdoneFarben.detailFlaeche,
+          leading: widget.eingebettet
+              ? IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Schließen',
+                  onPressed: _schliessen,
+                )
+              : null,
+          title: const Text('Aufgabe'),
+        ),
         body: const Center(
           child: Text('Diese Aufgabe existiert nicht mehr.'),
         ),
@@ -108,6 +149,14 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
       backgroundColor: TickdoneFarben.detailFlaeche,
       appBar: AppBar(
         backgroundColor: TickdoneFarben.detailFlaeche,
+        automaticallyImplyLeading: !widget.eingebettet,
+        leading: widget.eingebettet
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Schließen (Esc)',
+                onPressed: _schliessen,
+              )
+            : null,
         title: Text(appState.aktiveListe?.displayName ?? ''),
       ),
       body: ListView(
@@ -338,7 +387,7 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                       await AufgabenScreen.loeschenBestaetigen(
                           context, aufgabe);
                   if (geloescht && context.mounted) {
-                    Navigator.of(context).pop();
+                    _schliessen();
                   }
                 },
               ),

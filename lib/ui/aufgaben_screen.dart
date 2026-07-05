@@ -1,3 +1,5 @@
+import 'package:caldav/caldav.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,6 +7,14 @@ import '../models/aufgabe.dart';
 import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgabe_detail_screen.dart';
+
+/// Läuft die App auf einem Desktop-Betriebssystem? Dann Rechtsklick-
+/// Kontextmenü mit Tastenkürzeln statt Mehrfachauswahl per langem Tippen.
+bool get istDesktop =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.macOS);
 
 /// Zeigt die Wurzel-Aufgaben der geöffneten Liste.
 ///
@@ -53,138 +63,166 @@ class AufgabenScreen extends StatefulWidget {
         .erstelleAufgabe(titel, parentUid: parentUid);
   }
 
-  /// Kontextmenü einer Aufgabe (Design-Doc, Abschnitt 5) –
-  /// auf dem Desktop per Rechtsklick.
+  /// Kontextmenü einer Aufgabe (Design-Doc, Abschnitt 5) – als verankertes
+  /// Popup (wie in der Desktop-Version). [position] ist der globale
+  /// Klickpunkt; ohne Angabe erscheint es an der Bildschirmmitte.
+  /// Auf dem Desktop werden Tastenkürzel rechts angezeigt.
   static Future<void> kontextMenue(
     BuildContext context,
-    Aufgabe aufgabe,
-  ) async {
+    Aufgabe aufgabe, {
+    Offset? position,
+  }) async {
     final appState = context.read<AppState>();
     final heute = DateTime.now();
     final morgen = heute.add(const Duration(days: 1));
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) {
-        void schliessenUnd(void Function() aktion) {
-          Navigator.of(sheetContext).pop();
-          aktion();
-        }
+    final andereListen = appState.aufgabenlisten
+        .where((l) => l.uid != appState.aktiveListe?.uid)
+        .toList();
+    final verschiebbar =
+        aufgabe.parentUid == null && andereListen.isNotEmpty;
 
-        return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.wb_sunny_outlined),
-                title: Text(aufgabe.meinTag
-                    ? 'Aus "Mein Tag" entfernen'
-                    : 'Zu "Mein Tag" hinzufügen'),
-                onTap: () => schliessenUnd(() =>
-                    appState.setzeMeinTag(aufgabe.uid, !aufgabe.meinTag)),
-              ),
-              ListTile(
-                leading: Icon(
-                    aufgabe.wichtig ? Icons.star : Icons.star_border),
-                title: Text(aufgabe.wichtig
-                    ? 'Wichtig entfernen'
-                    : 'Als wichtig markieren'),
-                onTap: () => schliessenUnd(() =>
-                    appState.setzeWichtig(aufgabe.uid, !aufgabe.wichtig)),
-              ),
-              ListTile(
-                leading: Icon(aufgabe.erledigt
-                    ? Icons.radio_button_unchecked
-                    : Icons.check_circle_outline),
-                title: Text(aufgabe.erledigt
-                    ? 'Als offen markieren'
-                    : 'Als erledigt markieren'),
-                onTap: () => schliessenUnd(() =>
-                    appState.setzeErledigt(aufgabe.uid, !aufgabe.erledigt)),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.today),
-                title: const Text('Heute fällig'),
-                onTap: () => schliessenUnd(() => appState.setzeFaellig(
-                    aufgabe.uid,
-                    DateTime(heute.year, heute.month, heute.day))),
-              ),
-              ListTile(
-                leading: const Icon(Icons.event),
-                title: const Text('Morgen fällig'),
-                onTap: () => schliessenUnd(() => appState.setzeFaellig(
-                    aufgabe.uid,
-                    DateTime(morgen.year, morgen.month, morgen.day))),
-              ),
-              if (aufgabe.faellig != null)
-                ListTile(
-                  leading: const Icon(Icons.event_busy),
-                  title: const Text('Termin entfernen'),
-                  onTap: () => schliessenUnd(
-                      () => appState.setzeFaellig(aufgabe.uid, null)),
-                ),
-              const Divider(height: 1),
-              // Nur die ANDEREN Listen anbieten (Design-Doc, Abschnitt 5).
-              if (aufgabe.parentUid == null &&
-                  appState.aufgabenlisten
-                      .where((l) => l.uid != appState.aktiveListe?.uid)
-                      .isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.drive_file_move_outline),
-                  title: const Text('Aufgabe verschieben in …'),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _verschiebenMenue(context, aufgabe);
-                  },
-                ),
-              ListTile(
-                leading: Icon(Icons.delete_outline,
-                    color: Theme.of(sheetContext).colorScheme.error),
-                title: Text(
-                  'Aufgabe löschen',
-                  style: TextStyle(
-                      color: Theme.of(sheetContext).colorScheme.error),
-                ),
-                onTap: () => schliessenUnd(
-                    () => loeschenBestaetigen(context, aufgabe)),
-              ),
-            ],
+    final aktion = await _zeigePopup<void Function()>(
+      context,
+      position,
+      [
+        _menuEintrag(
+          icon: Icons.wb_sunny_outlined,
+          text: aufgabe.meinTag
+              ? 'Aus "Mein Tag" entfernen'
+              : 'Zu "Mein Tag" hinzufügen',
+          kuerzel: 'Strg+T',
+          wert: () => appState.setzeMeinTag(aufgabe.uid, !aufgabe.meinTag),
+        ),
+        _menuEintrag(
+          icon: aufgabe.wichtig ? Icons.star : Icons.star_border,
+          text: aufgabe.wichtig
+              ? 'Wichtig entfernen'
+              : 'Als wichtig markieren',
+          wert: () => appState.setzeWichtig(aufgabe.uid, !aufgabe.wichtig),
+        ),
+        _menuEintrag(
+          icon: aufgabe.erledigt
+              ? Icons.radio_button_unchecked
+              : Icons.check_circle_outline,
+          text: aufgabe.erledigt
+              ? 'Als offen markieren'
+              : 'Als erledigt markieren',
+          kuerzel: 'Strg+D',
+          wert: () => appState.setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
+        ),
+        const PopupMenuDivider(),
+        _menuEintrag(
+          icon: Icons.today,
+          text: 'Heute fällig',
+          wert: () => appState.setzeFaellig(
+              aufgabe.uid, DateTime(heute.year, heute.month, heute.day)),
+        ),
+        _menuEintrag(
+          icon: Icons.event,
+          text: 'Morgen fällig',
+          wert: () => appState.setzeFaellig(
+              aufgabe.uid, DateTime(morgen.year, morgen.month, morgen.day)),
+        ),
+        _menuEintrag(
+          icon: Icons.event_busy,
+          text: 'Termin entfernen',
+          wert: () => appState.setzeFaellig(aufgabe.uid, null),
+        ),
+        if (verschiebbar) const PopupMenuDivider(),
+        if (verschiebbar)
+          _menuEintrag(
+            icon: Icons.drive_file_move_outline,
+            text: 'Aufgabe verschieben in …',
+            chevron: true,
+            wert: () => _verschiebenMenue(context, aufgabe, position),
           ),
-        );
-      },
+        const PopupMenuDivider(),
+        _menuEintrag(
+          icon: Icons.delete_outline,
+          text: 'Aufgabe löschen',
+          kuerzel: 'Entf',
+          rot: true,
+          wert: () => loeschenBestaetigen(context, aufgabe),
+        ),
+      ],
     );
+    aktion?.call();
   }
 
   /// Untermenü "Verschieben in …" mit den anderen Listen.
   static Future<void> _verschiebenMenue(
     BuildContext context,
     Aufgabe aufgabe,
+    Offset? position,
   ) async {
     final appState = context.read<AppState>();
     final andereListen = appState.aufgabenlisten
         .where((l) => l.uid != appState.aktiveListe?.uid)
         .toList();
-    await showModalBottomSheet<void>(
+    final ziel = await _zeigePopup<Calendar>(
+      context,
+      position,
+      [
+        for (final liste in andereListen)
+          _menuEintrag(
+            icon: Icons.checklist,
+            text: liste.displayName,
+            wert: liste,
+          ),
+      ],
+    );
+    if (ziel != null) {
+      await appState.verschiebeAufgabe(aufgabe.uid, ziel);
+    }
+  }
+
+  /// Zeigt ein verankertes Popup an [position] (oder mittig).
+  static Future<T?> _zeigePopup<T>(
+    BuildContext context,
+    Offset? position,
+    List<PopupMenuEntry<T>> eintraege,
+  ) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final punkt = position ??
+        overlay.localToGlobal(overlay.size.center(Offset.zero));
+    return showMenu<T>(
       context: context,
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const ListTile(
-              title: Text('Verschieben in …',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            for (final liste in andereListen)
-              ListTile(
-                leading: const Icon(Icons.checklist),
-                title: Text(liste.displayName),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  appState.verschiebeAufgabe(aufgabe.uid, liste);
-                },
-              ),
-          ],
-        ),
+      color: TickdoneFarben.flaecheHover,
+      position: RelativeRect.fromRect(
+        punkt & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: eintraege,
+    );
+  }
+
+  /// Ein Menüeintrag mit Icon, Text und optional Tastenkürzel (nur Desktop)
+  /// oder Untermenü-Pfeil.
+  static PopupMenuItem<T> _menuEintrag<T>({
+    required IconData icon,
+    required String text,
+    required T wert,
+    String? kuerzel,
+    bool chevron = false,
+    bool rot = false,
+  }) {
+    final farbe = rot ? TickdoneFarben.ueberfaellig : TickdoneFarben.text;
+    return PopupMenuItem<T>(
+      value: wert,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: farbe),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: TextStyle(color: farbe))),
+          if (chevron)
+            const Icon(Icons.chevron_right,
+                size: 18, color: TickdoneFarben.textGedimmt)
+          else if (kuerzel != null && istDesktop)
+            Text(kuerzel,
+                style: const TextStyle(
+                    color: TickdoneFarben.textGedimmt, fontSize: 12)),
+        ],
       ),
     );
   }
@@ -423,7 +461,7 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       body: Column(
         children: [
           // Inline-Zeile "Aufgabe hinzufügen" (Design-Doc, Abschnitt 3).
-          const _NeueAufgabeZeile(),
+          const NeueAufgabeZeile(),
           if (appState.aufgabenLaden) const LinearProgressIndicator(),
           if (appState.aufgabenFehler != null)
             Padding(
@@ -458,13 +496,25 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                       itemCount: aufgaben.length,
                       itemBuilder: (context, index) {
                         final aufgabe = aufgaben[index];
-                        return _AufgabenZeile(
+                        return AufgabenZeile(
                           aufgabe: aufgabe,
                           fortschritt:
                               appState.fortschrittVon(aufgabe.uid),
                           ausgewaehlt: _auswahl.contains(aufgabe.uid),
-                          auswahlModus: _auswahlModus,
-                          onAuswahl: () => _auswahlUmschalten(aufgabe.uid),
+                          onTap: () {
+                            if (_auswahlModus) {
+                              _auswahlUmschalten(aufgabe.uid);
+                            } else {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      AufgabeDetailScreen(uid: aufgabe.uid),
+                                ),
+                              );
+                            }
+                          },
+                          // Handy: langes Drücken = Mehrfachauswahl.
+                          onLongPress: () => _auswahlUmschalten(aufgabe.uid),
                         );
                       },
                     ),
@@ -478,14 +528,17 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
 
 /// Eingabezeile "Aufgabe hinzufügen" oberhalb der Liste –
 /// Enter legt sofort an (Design-Doc, Abschnitt 3).
-class _NeueAufgabeZeile extends StatefulWidget {
-  const _NeueAufgabeZeile();
+class NeueAufgabeZeile extends StatefulWidget {
+  const NeueAufgabeZeile({super.key, this.focusNode});
+
+  /// Optional, damit Strg+N (Desktop) den Fokus hierher setzen kann.
+  final FocusNode? focusNode;
 
   @override
-  State<_NeueAufgabeZeile> createState() => _NeueAufgabeZeileState();
+  State<NeueAufgabeZeile> createState() => _NeueAufgabeZeileState();
 }
 
-class _NeueAufgabeZeileState extends State<_NeueAufgabeZeile> {
+class _NeueAufgabeZeileState extends State<NeueAufgabeZeile> {
   final _controller = TextEditingController();
 
   @override
@@ -507,8 +560,9 @@ class _NeueAufgabeZeileState extends State<_NeueAufgabeZeile> {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: TextField(
         controller: _controller,
+        focusNode: widget.focusNode,
         decoration: const InputDecoration(
-          hintText: 'Aufgabe hinzufügen',
+          hintText: 'Aufgabe hinzufügen und Enter drücken …',
           prefixIcon: Icon(Icons.add, color: TickdoneFarben.akzent),
           isDense: true,
         ),
@@ -520,29 +574,34 @@ class _NeueAufgabeZeileState extends State<_NeueAufgabeZeile> {
 
 /// Eine Zeile der Aufgabenliste: Status-Icon, Titel, Meta-Zeile
 /// (Fälligkeit · x von y · Notiz), Stern (wichtig).
-class _AufgabenZeile extends StatelessWidget {
-  const _AufgabenZeile({
+///
+/// [onTap]/[onLongPress] steuern Verhalten je Plattform (Handy: Auswahl,
+/// Desktop: Detail wählen). Rechtsklick öffnet immer das Kontextmenü.
+class AufgabenZeile extends StatelessWidget {
+  const AufgabenZeile({
+    super.key,
     required this.aufgabe,
     this.fortschritt,
     required this.ausgewaehlt,
-    required this.auswahlModus,
-    required this.onAuswahl,
+    required this.onTap,
+    this.onLongPress,
   });
 
   final Aufgabe aufgabe;
   final ({int erledigt, int gesamt})? fortschritt;
   final bool ausgewaehlt;
-  final bool auswahlModus;
-  final VoidCallback onAuswahl;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       child: GestureDetector(
-        // Desktop: Rechtsklick öffnet das Kontextmenü.
-        onSecondaryTap: () =>
-            AufgabenScreen.kontextMenue(context, aufgabe),
+        // Desktop: Rechtsklick öffnet das Kontextmenü am Klickpunkt.
+        onSecondaryTapUp: (details) => AufgabenScreen.kontextMenue(
+            context, aufgabe,
+            position: details.globalPosition),
         child: ListTile(
           selected: ausgewaehlt,
           tileColor: TickdoneFarben.flaeche,
@@ -595,19 +654,8 @@ class _AufgabenZeile extends StatelessWidget {
                 .read<AppState>()
                 .setzeWichtig(aufgabe.uid, !aufgabe.wichtig),
           ),
-          onTap: () {
-            if (auswahlModus) {
-              onAuswahl();
-              return;
-            }
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => AufgabeDetailScreen(uid: aufgabe.uid),
-              ),
-            );
-          },
-          // Handy: langes Drücken startet/erweitert die Mehrfachauswahl.
-          onLongPress: onAuswahl,
+          onTap: onTap,
+          onLongPress: onLongPress,
         ),
       ),
     );

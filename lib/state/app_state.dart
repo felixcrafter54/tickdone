@@ -125,6 +125,17 @@ class AppState extends ChangeNotifier {
   bool aufgabenLaden = false;
   String? aufgabenFehler;
 
+  /// Im Drei-Spalten-Layout (Desktop/Tablet): die gerade im Detailbereich
+  /// gezeigte Aufgabe. Auf dem Handy ungenutzt (dort Push-Navigation).
+  String? aktiveAufgabeUid;
+
+  /// Aufgabe für den Detailbereich wählen (null schließt ihn).
+  void waehleAufgabe(String? uid) {
+    if (aktiveAufgabeUid == uid) return;
+    aktiveAufgabeUid = uid;
+    notifyListeners();
+  }
+
   Sortierung sortierung = Sortierung.manuell;
   AufgabenFilter filter = AufgabenFilter.alle;
 
@@ -214,6 +225,8 @@ class AppState extends ChangeNotifier {
     aktiveListe = liste;
     aufgaben = [];
     aufgabenFehler = null;
+    // Beim Listenwechsel keine alte Detail-Auswahl behalten.
+    aktiveAufgabeUid = null;
     await aufgabenNeuLaden();
   }
 
@@ -450,6 +463,7 @@ class AppState extends ChangeNotifier {
     _caldav.trennen();
     aufgabenlisten = [];
     aktiveListe = null;
+    aktiveAufgabeUid = null;
     aufgaben = [];
     aufgabenFehler = null;
     fehlermeldung = null;
