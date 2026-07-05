@@ -62,6 +62,41 @@ class Aufgabe {
   /// Schritte (Subtasks) sind Aufgaben mit Eltern-Verweis.
   bool get istSchritt => parentUid != null;
 
+  /// Kopie mit geänderten Feldern – für optimistische Updates
+  /// (lokal sofort anzeigen, im Hintergrund speichern).
+  /// [faelligEntfernen] löscht die Fälligkeit, da null hier
+  /// "nicht ändern" bedeutet.
+  Aufgabe kopieMit({
+    String? titel,
+    bool? erledigt,
+    DateTime? faellig,
+    bool faelligEntfernen = false,
+    int? prioritaet,
+    String? notiz,
+    int? prozent,
+    String? etag,
+    String? rohIcal,
+  }) {
+    return Aufgabe(
+      uid: uid,
+      titel: titel ?? this.titel,
+      erledigt: erledigt ?? this.erledigt,
+      parentUid: parentUid,
+      faellig: faelligEntfernen ? null : (faellig ?? this.faellig),
+      prioritaet: prioritaet ?? this.prioritaet,
+      notiz: notiz ?? this.notiz,
+      prozent: prozent ?? this.prozent,
+      sequence: sequence,
+      sortOrder: sortOrder,
+      favorit: favorit,
+      meinTag: meinTag,
+      erstellt: erstellt,
+      etag: etag ?? this.etag,
+      href: href,
+      rohIcal: rohIcal ?? this.rohIcal,
+    );
+  }
+
   /// Parst das iCalendar einer VTODO-Ressource vom Server.
   ///
   /// Liefert null, wenn der Text keine VTODO enthält.
@@ -86,13 +121,17 @@ class Aufgabe {
 
     return Aufgabe(
       uid: vtodo.uid,
-      titel: vtodo.summary ?? '',
+      // Nicht die Getter des Pakets nehmen: summary liefert den escapten
+      // Rohtext, und auch .text entescapt unvollständig (kein \; und \\).
+      titel: _entescape(
+          vtodo.getProperty<TextProperty>('SUMMARY')?.textValue ?? ''),
       // STATUS kann fehlen – dann gilt die Aufgabe als offen (Spec).
       erledigt: vtodo.status == TodoStatus.completed,
       parentUid: _parentUidVon(vtodo),
       faellig: vtodo.due,
       prioritaet: vtodo.priorityInt ?? 0,
-      notiz: vtodo.description ?? '',
+      notiz: _entescape(
+          vtodo.getProperty<TextProperty>('DESCRIPTION')?.textValue ?? ''),
       prozent: vtodo.percentComplete ?? 0,
       sequence: vtodo.sequence ?? 0,
       sortOrder: _parseSortOrder(
@@ -104,6 +143,37 @@ class Aufgabe {
       href: href,
       rohIcal: ical,
     );
+  }
+
+  /// Löst iCalendar-Escaping vollständig auf (RFC 5545:
+  /// Backslash, Semikolon, Komma, Zeilenumbruch).
+  static String _entescape(String text) {
+    final puffer = StringBuffer();
+    var i = 0;
+    while (i < text.length) {
+      final zeichen = text[i];
+      if (zeichen == r'\' && i + 1 < text.length) {
+        final naechstes = text[i + 1];
+        switch (naechstes) {
+          case 'n':
+          case 'N':
+            puffer.write('\n');
+          case r'\':
+          case ';':
+          case ',':
+            puffer.write(naechstes);
+          default:
+            // Unbekannte Escape-Folge unverändert übernehmen.
+            puffer.write(zeichen);
+            puffer.write(naechstes);
+        }
+        i += 2;
+      } else {
+        puffer.write(zeichen);
+        i++;
+      }
+    }
+    return puffer.toString();
   }
 
   /// Der "Mein Tag"-Marker für ein Datum, z.B. MYDAY-2026-07-05.

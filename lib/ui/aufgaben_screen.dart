@@ -7,10 +7,47 @@ import 'aufgabe_detail_screen.dart';
 
 /// Zeigt die Wurzel-Aufgaben der geöffneten Liste.
 ///
-/// Schritte (Subtasks) erscheinen hier bewusst NICHT – die kommen in die
-/// Detailansicht (Spec Schritt 5). Abhaken/Bearbeiten folgt in Schritt 6.
+/// Schritte (Subtasks) erscheinen hier bewusst NICHT – die stehen in der
+/// Detailansicht. Abhaken: aufs Status-Icon tippen (optimistisch, ohne
+/// Neuladen). Neue Aufgabe: Plus-Button.
 class AufgabenScreen extends StatelessWidget {
   const AufgabenScreen({super.key});
+
+  /// Dialog für eine neue Aufgabe (bzw. einen Schritt, siehe Detailansicht).
+  static Future<void> neueAufgabeDialog(
+    BuildContext context, {
+    String? parentUid,
+  }) async {
+    final controller = TextEditingController();
+    final titel = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(parentUid == null ? 'Neue Aufgabe' : 'Neuer Schritt'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Titel'),
+          onSubmitted: (wert) => Navigator.of(dialogContext).pop(wert),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('Anlegen'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (titel == null || titel.trim().isEmpty || !context.mounted) return;
+    await context
+        .read<AppState>()
+        .erstelleAufgabe(titel, parentUid: parentUid);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +100,11 @@ class AufgabenScreen extends StatelessWidget {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Neue Aufgabe',
+        onPressed: () => neueAufgabeDialog(context),
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
@@ -79,11 +121,19 @@ class _AufgabenZeile extends StatelessWidget {
   Widget build(BuildContext context) {
     final farben = Theme.of(context).colorScheme;
     return ListTile(
-      leading: Icon(
-        aufgabe.erledigt
-            ? Icons.check_circle
-            : Icons.radio_button_unchecked,
-        color: aufgabe.erledigt ? farben.primary : farben.outline,
+      // Tippen aufs Icon hakt ab bzw. öffnet wieder – optimistisch,
+      // gespeichert wird im Hintergrund.
+      leading: IconButton(
+        icon: Icon(
+          aufgabe.erledigt
+              ? Icons.check_circle
+              : Icons.radio_button_unchecked,
+          color: aufgabe.erledigt ? farben.primary : farben.outline,
+        ),
+        tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
+        onPressed: () => context
+            .read<AppState>()
+            .setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
       ),
       title: Text(
         aufgabe.titel,

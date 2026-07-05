@@ -41,6 +41,13 @@ void main() {
       expect(aufgabe.istSchritt, isFalse);
     });
 
+    test('escapte Sonderzeichen im Titel werden aufgelöst', () {
+      final aufgabe = Aufgabe.ausICalendar(vtodoIcal([
+        r'SUMMARY:Einkaufen\; Obst\, Gemüse',
+      ]))!;
+      expect(aufgabe.titel, 'Einkaufen; Obst, Gemüse');
+    });
+
     test('fehlender STATUS bedeutet offen, COMPLETED bedeutet erledigt', () {
       final ohneStatus = Aufgabe.ausICalendar(vtodoIcal(['SUMMARY:A']))!;
       expect(ohneStatus.erledigt, isFalse);

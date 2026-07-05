@@ -4,6 +4,7 @@ import 'package:caldav/caldav.dart';
 import 'package:dio/dio.dart';
 
 import '../models/aufgabe.dart';
+import 'vtodo_patch.dart';
 
 /// Kapselt die CalDAV-Verbindung zum Server.
 ///
@@ -127,6 +128,72 @@ class CalDavService {
       }
     }
     return aufgaben;
+  }
+
+  /// Speichert eine Änderung an einer Aufgabe verlustfrei.
+  ///
+  /// Ablauf nach Spec, Abschnitt 2: Roh-iCalendar patchen (SEQUENCE +1,
+  /// LAST-MODIFIED), PUT mit ETag als If-Match. Bei 412 (jemand anders hat
+  /// zwischenzeitlich gespeichert): Objekt frisch holen, [patch] erneut
+  /// anwenden, nochmal speichern.
+  Future<Aufgabe> speichereAenderung(Aufgabe aufgabe, IcalPatch patch) async {
+    final href = aufgabe.href;
+    if (href == null) {
+      throw StateError('Aufgabe ohne href kann nicht gespeichert werden.');
+    }
+    try {
+      return await _putAufgabe(href, patch(aufgabe.rohIcal), aufgabe.etag);
+    } on DioException catch (fehler) {
+      if (fehler.response?.statusCode != 412) rethrow;
+      final frisch = await _holeAufgabe(href);
+      return _putAufgabe(href, patch(frisch.ical), frisch.etag);
+    }
+  }
+
+  /// Legt eine neue Aufgabe (oder mit [parentUid] einen Schritt) an.
+  ///
+  /// If-None-Match: * verhindert, dass eine bestehende Ressource
+  /// überschrieben wird.
+  Future<void> erstelleAufgabe(
+    Calendar liste, {
+    required String titel,
+    String? parentUid,
+  }) async {
+    final uid = neueUid();
+    final ical = neuesVTodoIcal(uid: uid, titel: titel, parentUid: parentUid);
+    final href = liste.href.resolve('$uid.ics');
+    await client.webdavClient.put(
+      href.toString(),
+      body: ical,
+      ifNoneMatch: '*',
+    );
+  }
+
+  /// PUT einer Aufgabe; liefert das Model zum neuen Serverstand.
+  Future<Aufgabe> _putAufgabe(Uri href, String ical, String? etag) async {
+    final antwort = await client.webdavClient.put(
+      href.toString(),
+      body: ical,
+      ifMatch: etag,
+    );
+    final neuerEtag = antwort.headers.value('etag');
+    if (neuerEtag == null) {
+      // Server liefert beim PUT keinen ETag – Stand frisch holen.
+      final frisch = await _holeAufgabe(href);
+      final aufgabe =
+          Aufgabe.ausICalendar(frisch.ical, etag: frisch.etag, href: href);
+      if (aufgabe != null) return aufgabe;
+    }
+    return Aufgabe.ausICalendar(ical, etag: neuerEtag, href: href)!;
+  }
+
+  /// Holt das aktuelle iCalendar + ETag einer einzelnen Aufgabe.
+  Future<({String ical, String? etag})> _holeAufgabe(Uri href) async {
+    final antwort = await client.webdavClient.get(href.toString());
+    return (
+      ical: antwort.data ?? '',
+      etag: antwort.headers.value('etag'),
+    );
   }
 
   /// Verbindung schließen und Zustand zurücksetzen.
