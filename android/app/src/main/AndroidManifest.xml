@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Netzwerkzugriff fuer CalDAV - im Release-Manifest noetig, das
+         Flutter-Template setzt die Berechtigung nur fuer Debug/Profile. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="tickdone"
         android:name="${applicationName}"
