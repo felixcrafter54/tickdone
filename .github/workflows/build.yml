@@ -1,0 +1,63 @@
+# Baut testbare Pakete: Windows-EXE und Android-APK.
+# Läuft bei jedem Push und lässt sich im Actions-Tab manuell starten.
+# Die Ergebnisse hängen als Artefakte am jeweiligen Lauf (Zip-Download).
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: Windows-EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Abhängigkeiten holen
+        run: flutter pub get
+
+      - name: Tests ausführen
+        run: flutter test
+
+      - name: Windows-Build (Release)
+        run: flutter build windows --release
+
+      - name: EXE als Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: tickdone-windows
+          path: build/windows/x64/runner/Release/
+
+  android:
+    name: Android-APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Abhängigkeiten holen
+        run: flutter pub get
+
+      - name: APK bauen (Release, Debug-Signatur)
+        run: flutter build apk --release
+
+      - name: APK als Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: tickdone-android
+          path: build/app/outputs/flutter-apk/app-release.apk
