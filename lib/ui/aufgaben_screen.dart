@@ -49,6 +49,40 @@ class AufgabenScreen extends StatelessWidget {
         .erstelleAufgabe(titel, parentUid: parentUid);
   }
 
+  /// Nachfrage und Löschen einer Aufgabe bzw. eines Schritts.
+  /// Gibt true zurück, wenn gelöscht wurde.
+  static Future<bool> loeschenBestaetigen(
+    BuildContext context,
+    Aufgabe aufgabe,
+  ) async {
+    final schritte =
+        context.read<AppState>().fortschrittVon(aufgabe.uid)?.gesamt ?? 0;
+    final bestaetigt = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('"${aufgabe.titel}" löschen?'),
+        content: schritte > 0
+            ? Text('Auch die $schritte Schritte werden gelöscht.')
+            : null,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (bestaetigt != true || !context.mounted) return false;
+    return context.read<AppState>().loescheAufgabe(aufgabe.uid);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -198,6 +232,9 @@ class _AufgabenZeile extends StatelessWidget {
           ),
         );
       },
+      // Kontextaktion (Spec: langes Tippen auf Mobile).
+      onLongPress: () =>
+          AufgabenScreen.loeschenBestaetigen(context, aufgabe),
     );
   }
 

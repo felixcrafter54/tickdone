@@ -91,7 +91,22 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     final farben = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: Text(appState.aktiveListe?.displayName ?? '')),
+      appBar: AppBar(
+        title: Text(appState.aktiveListe?.displayName ?? ''),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Aufgabe löschen',
+            onPressed: () async {
+              final geloescht = await AufgabenScreen.loeschenBestaetigen(
+                  context, aufgabe);
+              if (geloescht && context.mounted) {
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -245,6 +260,12 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                         color: farben.outline,
                       )
                     : null,
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Schritt löschen',
+                onPressed: () =>
+                    AufgabenScreen.loeschenBestaetigen(context, schritt),
               ),
             ),
 

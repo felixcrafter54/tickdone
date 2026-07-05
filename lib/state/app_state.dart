@@ -86,6 +86,38 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Neue Aufgabenliste anlegen und die Übersicht aktualisieren.
+  Future<bool> erstelleListe(String name) async {
+    final bereinigt = name.trim();
+    if (bereinigt.isEmpty || !istVerbunden) return false;
+    try {
+      await _caldav.erstelleListe(bereinigt);
+      await listenNeuLaden();
+      return true;
+    } catch (fehler) {
+      fehlermeldung = 'Liste anlegen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Liste samt Inhalt löschen.
+  Future<bool> loescheListe(Calendar liste) async {
+    try {
+      await _caldav.loescheListe(liste);
+      if (aktiveListe?.uid == liste.uid) {
+        aktiveListe = null;
+        aufgaben = [];
+      }
+      await listenNeuLaden();
+      return true;
+    } catch (fehler) {
+      fehlermeldung = 'Liste löschen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      notifyListeners();
+      return false;
+    }
+  }
+
   // ---- Aufgaben der geöffneten Liste ----
 
   Calendar? aktiveListe;
@@ -289,6 +321,33 @@ class AppState extends ChangeNotifier {
     } catch (fehler) {
       aufgabenFehler = 'Anlegen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
       notifyListeners();
+      return false;
+    }
+  }
+
+  /// Aufgabe samt ihrer Schritte löschen (wie in der Desktop-App:
+  /// Schritte hängen an der Aufgabe und gehen mit ihr).
+  /// Optimistisch aus der Anzeige entfernt, danach neu geladen
+  /// (Spec: bei Anlegen/Löschen neu laden).
+  Future<bool> loescheAufgabe(String uid) async {
+    final aufgabe = aufgabeMitUid(uid);
+    if (aufgabe == null) return false;
+    final zuLoeschen = [
+      ...aufgaben.where((a) => a.parentUid == uid),
+      aufgabe,
+    ];
+    aufgaben.removeWhere((a) => a.uid == uid || a.parentUid == uid);
+    notifyListeners();
+    try {
+      for (final einzelne in zuLoeschen) {
+        await _caldav.loescheAufgabe(einzelne);
+      }
+      await aufgabenNeuLaden();
+      return true;
+    } catch (fehler) {
+      aufgabenFehler = 'Löschen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      // Anzeige wieder mit dem Server abgleichen.
+      await aufgabenNeuLaden();
       return false;
     }
   }
