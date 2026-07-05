@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/aufgabe.dart';
 import '../services/caldav_service.dart';
+import '../services/vtodo_patch.dart';
 
 /// Zentraler App-Zustand: Verbindung und geladene Aufgabenlisten.
 ///
@@ -124,6 +125,122 @@ class AppState extends ChangeNotifier {
     } finally {
       aufgabenLaden = false;
       notifyListeners();
+    }
+  }
+
+  // ---- Ändern, Abhaken, Erstellen (Spec Schritt 6) ----
+
+  /// Pro UID läuft immer nur EIN Speichern gleichzeitig; weitere
+  /// Änderungen werden hinten angehängt (Spec, Abschnitt 2).
+  final Map<String, Future<void>> _speicherKette = {};
+
+  /// Abhaken bzw. wieder öffnen – optimistisch.
+  Future<void> setzeErledigt(String uid, bool erledigt) =>
+      _aendereUndSpeichere(
+        uid,
+        lokal: (a) =>
+            a.kopieMit(erledigt: erledigt, prozent: erledigt ? 100 : 0),
+        patch: erledigtPatch(erledigt),
+      );
+
+  /// Titel ändern (Auto-Save beim Verlassen des Feldes).
+  Future<void> setzeTitel(String uid, String titel) {
+    final bereinigt = titel.trim();
+    if (bereinigt.isEmpty || aufgabeMitUid(uid)?.titel == bereinigt) {
+      return Future.value();
+    }
+    return _aendereUndSpeichere(
+      uid,
+      lokal: (a) => a.kopieMit(titel: bereinigt),
+      patch: titelPatch(bereinigt),
+    );
+  }
+
+  /// Notiz ändern (Auto-Save beim Verlassen des Feldes, Spec Abschnitt 3).
+  Future<void> setzeNotiz(String uid, String notiz) {
+    if (aufgabeMitUid(uid)?.notiz == notiz) return Future.value();
+    return _aendereUndSpeichere(
+      uid,
+      lokal: (a) => a.kopieMit(notiz: notiz),
+      patch: notizPatch(notiz),
+    );
+  }
+
+  /// Priorität ändern (sofort speichern).
+  Future<void> setzePrioritaet(String uid, int prioritaet) =>
+      _aendereUndSpeichere(
+        uid,
+        lokal: (a) => a.kopieMit(prioritaet: prioritaet),
+        patch: prioritaetPatch(prioritaet),
+      );
+
+  /// Fälligkeit setzen oder entfernen (sofort speichern).
+  Future<void> setzeFaellig(String uid, DateTime? datum) =>
+      _aendereUndSpeichere(
+        uid,
+        lokal: (a) => datum == null
+            ? a.kopieMit(faelligEntfernen: true)
+            : a.kopieMit(faellig: datum),
+        patch: faelligPatch(datum),
+      );
+
+  /// Neue Aufgabe (oder mit [parentUid] einen Schritt) anlegen.
+  /// Nur hier wird die Liste neu geladen (Spec, Abschnitt 3).
+  Future<bool> erstelleAufgabe(String titel, {String? parentUid}) async {
+    final liste = aktiveListe;
+    final bereinigt = titel.trim();
+    if (liste == null || bereinigt.isEmpty) return false;
+    try {
+      await _caldav.erstelleAufgabe(liste,
+          titel: bereinigt, parentUid: parentUid);
+      await aufgabenNeuLaden();
+      return true;
+    } catch (fehler) {
+      aufgabenFehler = 'Anlegen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Kern der optimistischen Updates: lokal sofort ändern und anzeigen,
+  /// dann im Hintergrund speichern – OHNE die Liste neu zu laden.
+  /// Schlägt das Speichern endgültig fehl, wird neu geladen, damit die
+  /// Anzeige wieder dem Server entspricht.
+  Future<void> _aendereUndSpeichere(
+    String uid, {
+    required Aufgabe Function(Aufgabe) lokal,
+    required IcalPatch patch,
+  }) {
+    final aufgabe = aufgabeMitUid(uid);
+    if (aufgabe == null) return Future.value();
+
+    _ersetzeAufgabe(lokal(aufgabe));
+    notifyListeners();
+
+    final vorgaenger = _speicherKette[uid] ?? Future.value();
+    final eigener = vorgaenger.then((_) async {
+      // Frischen Stand nehmen: Ein vorheriges Update in der Kette kann
+      // ETag und Roh-iCalendar bereits geändert haben.
+      final aktuelle = aufgabeMitUid(uid);
+      if (aktuelle == null) return;
+      try {
+        final gespeichert = await _caldav.speichereAenderung(aktuelle, patch);
+        _ersetzeAufgabe(gespeichert);
+      } catch (fehler) {
+        aufgabenFehler =
+            'Speichern fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+        await aufgabenNeuLaden();
+      }
+      notifyListeners();
+    });
+    _speicherKette[uid] = eigener;
+    return eigener;
+  }
+
+  void _ersetzeAufgabe(Aufgabe neue) {
+    final index = aufgaben.indexWhere((a) => a.uid == neue.uid);
+    if (index >= 0) {
+      aufgaben[index] = neue;
     }
   }
 
