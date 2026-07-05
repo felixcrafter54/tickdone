@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/aufgabe.dart';
 import '../state/app_state.dart';
+import 'aufgabe_detail_screen.dart';
 
 /// Zeigt die Wurzel-Aufgaben der geöffneten Liste.
 ///
@@ -49,8 +50,14 @@ class AufgabenScreen extends StatelessWidget {
                     )
                   : ListView.builder(
                       itemCount: aufgaben.length,
-                      itemBuilder: (context, index) =>
-                          _AufgabenZeile(aufgabe: aufgaben[index]),
+                      itemBuilder: (context, index) {
+                        final aufgabe = aufgaben[index];
+                        return _AufgabenZeile(
+                          aufgabe: aufgabe,
+                          fortschritt:
+                              appState.fortschrittVon(aufgabe.uid),
+                        );
+                      },
                     ),
             ),
           ),
@@ -60,11 +67,13 @@ class AufgabenScreen extends StatelessWidget {
   }
 }
 
-/// Eine Zeile der Aufgabenliste: Status-Icon, Titel, Fälligkeit, Favorit.
+/// Eine Zeile der Aufgabenliste: Status-Icon, Titel, Fortschritt der
+/// Schritte ("x von y"), Fälligkeit, Favorit.
 class _AufgabenZeile extends StatelessWidget {
-  const _AufgabenZeile({required this.aufgabe});
+  const _AufgabenZeile({required this.aufgabe, this.fortschritt});
 
   final Aufgabe aufgabe;
+  final ({int erledigt, int gesamt})? fortschritt;
 
   @override
   Widget build(BuildContext context) {
@@ -90,11 +99,9 @@ class _AufgabenZeile extends StatelessWidget {
           ? Icon(Icons.star, color: Colors.amber.shade600)
           : null,
       onTap: () {
-        // Detailansicht mit Schritten kommt in Spec Schritt 5.
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"${aufgabe.titel}" – Detailansicht folgt '
-                'im nächsten Schritt.'),
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AufgabeDetailScreen(uid: aufgabe.uid),
           ),
         );
       },
@@ -103,6 +110,8 @@ class _AufgabenZeile extends StatelessWidget {
 
   Widget? _untertitel() {
     final teile = <String>[
+      if (fortschritt != null)
+        '${fortschritt!.erledigt} von ${fortschritt!.gesamt}',
       if (aufgabe.faellig != null) 'Fällig: ${_datum(aufgabe.faellig!)}',
       if (aufgabe.prioritaet == 1) 'Hohe Priorität',
       if (aufgabe.meinTag) 'Mein Tag',
