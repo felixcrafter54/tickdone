@@ -158,17 +158,20 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
           const Divider(height: 1),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               children: [
-                for (final schritt in schritte)
+                for (final schritt in schritte) ...[
                   _SchrittZeile(key: ValueKey(schritt.uid), schritt: schritt),
+                  const Divider(height: 1, color: TickdoneFarben.rahmen),
+                ],
                 _NaechsterSchritt(parentUid: widget.uid),
+                const SizedBox(height: 20),
+                _meinTagZeile(aufgabe),
+                const Divider(height: 1, color: TickdoneFarben.rahmen),
+                _faelligZeile(aufgabe),
+                const Divider(height: 1, color: TickdoneFarben.rahmen),
                 const SizedBox(height: 12),
-                _Karte(child: _meinTagZeile(aufgabe)),
-                const SizedBox(height: 8),
-                _Karte(child: _faelligZeile(aufgabe)),
-                const SizedBox(height: 8),
-                _Karte(child: _notizFeld()),
+                _notizFeld(),
               ],
             ),
           ),
@@ -214,12 +217,7 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                   ? TickdoneFarben.textSchwach
                   : TickdoneFarben.text,
             ),
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              filled: false,
-              isCollapsed: true,
-              hintText: 'Titel',
-            ),
+            decoration: randloseDeko('Titel'),
             onSubmitted: (wert) =>
                 context.read<AppState>().setzeTitel(widget.uid, wert),
           ),
@@ -287,17 +285,13 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
 
   Widget _notizFeld() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: TextField(
         controller: _notizController,
         focusNode: _notizFokus,
         maxLines: null,
         minLines: 3,
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          filled: false,
-          hintText: 'Notiz hinzufügen …',
-        ),
+        decoration: randloseDeko('Notiz hinzufügen …'),
       ),
     );
   }
@@ -329,25 +323,17 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
   }
 }
 
-/// Rundes Karten-Panel im Detailbereich (MS-To-Do-Stil).
-class _Karte extends StatelessWidget {
-  const _Karte({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: TickdoneFarben.flaeche,
-        borderRadius: BorderRadius.circular(tickdoneRadius),
-        border: Border.all(color: TickdoneFarben.rahmen),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-      child: child,
+/// Randlose Eingabe-Dekoration (kein Rahmen, keine Füllung) – überschreibt
+/// auch enabled/focused Border des Themes, sonst bliebe der Rahmen sichtbar.
+InputDecoration randloseDeko([String? hint]) => InputDecoration(
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      disabledBorder: InputBorder.none,
+      filled: false,
+      isCollapsed: true,
+      hintText: hint,
     );
-  }
-}
 
 /// Ein editierbarer Schritt (Subtask): reinklicken und tippen wie beim
 /// Haupttitel; speichert beim Verlassen des Feldes bzw. mit Enter.
@@ -423,11 +409,7 @@ class _SchrittZeileState extends State<_SchrittZeile> {
                   ? TickdoneFarben.textSchwach
                   : TickdoneFarben.text,
             ),
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              filled: false,
-              isCollapsed: true,
-            ),
+            decoration: randloseDeko(),
             onSubmitted: (wert) =>
                 context.read<AppState>().setzeTitel(schritt.uid, wert),
           ),
@@ -524,12 +506,7 @@ class _NaechsterSchrittState extends State<_NaechsterSchritt> {
             focusNode: _fokus,
             maxLines: null,
             style: const TextStyle(color: TickdoneFarben.text),
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              filled: false,
-              isCollapsed: true,
-              hintText: 'Nächster Schritt',
-            ),
+            decoration: randloseDeko('Nächster Schritt'),
             onSubmitted: (_) => _anlegen(),
           ),
         ),

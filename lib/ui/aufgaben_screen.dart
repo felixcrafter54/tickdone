@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/aufgabe.dart';
@@ -131,6 +132,36 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
   }
 
   void _auswahlBeenden() => setState(_auswahl.clear);
+
+  /// Antippen einer Zeile – je nach Plattform/Modus:
+  /// - Desktop mit Strg: Zeile zur Mehrfachauswahl hinzufügen/entfernen.
+  /// - Desktop ohne Strg: Auswahl leeren und Detail öffnen.
+  /// - Touch im Auswahlmodus: Auswahl umschalten.
+  /// - sonst: Detail öffnen (eingebettet wählen oder Route pushen).
+  void _aufTap(Aufgabe aufgabe) {
+    if (istDesktop && HardwareKeyboard.instance.isControlPressed) {
+      _auswahlUmschalten(aufgabe.uid);
+      return;
+    }
+    if (_auswahlModus) {
+      if (istDesktop) {
+        // Normaler Klick beendet die Mehrfachauswahl.
+        setState(_auswahl.clear);
+      } else {
+        _auswahlUmschalten(aufgabe.uid);
+        return;
+      }
+    }
+    if (widget.eingebettet) {
+      widget.onOeffneDetail?.call(aufgabe.uid);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AufgabeDetailScreen(uid: aufgabe.uid),
+        ),
+      );
+    }
+  }
 
   List<Aufgabe> _ausgewaehlteAufgaben(AppState appState) => [
         for (final uid in _auswahl)
@@ -308,7 +339,11 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
     final appState = context.watch<AppState>();
     final aufgaben = appState.wurzelAufgaben;
     return Scaffold(
-      appBar: _auswahlModus ? _auswahlAppBar() : _normaleAppBar(appState),
+      // Auf dem Desktop keine Auswahl-Leiste – dort läuft die
+      // Mehrfachauswahl über Strg+Klick und das Rechtsklick-Menü.
+      appBar: (_auswahlModus && !istDesktop)
+          ? _auswahlAppBar()
+          : _normaleAppBar(appState),
       body: Column(
         children: [
           // Inline-Zeile "Aufgabe hinzufügen" (Design-Doc, Abschnitt 3).
@@ -353,25 +388,19 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                             ? _auswahl.contains(aufgabe.uid)
                             : widget.eingebettet &&
                                 appState.aktiveAufgabeUid == aufgabe.uid;
+                        // Rechtsklick wirkt auf die gesamte Auswahl, wenn
+                        // die Zeile Teil einer Mehrfachauswahl ist.
+                        final ziele = (_auswahl.contains(aufgabe.uid) &&
+                                _auswahl.length > 1)
+                            ? _ausgewaehlteAufgaben(appState)
+                            : [aufgabe];
                         return AufgabenZeile(
                           aufgabe: aufgabe,
                           fortschritt: appState.fortschrittVon(aufgabe.uid),
                           ausgewaehlt: markiert,
                           auswahlModus: _auswahlModus,
-                          onTap: () {
-                            if (_auswahlModus) {
-                              _auswahlUmschalten(aufgabe.uid);
-                            } else if (widget.eingebettet) {
-                              widget.onOeffneDetail?.call(aufgabe.uid);
-                            } else {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      AufgabeDetailScreen(uid: aufgabe.uid),
-                                ),
-                              );
-                            }
-                          },
+                          kontextZiele: ziele,
+                          onTap: () => _aufTap(aufgabe),
                           // Langes Drücken (Touch) = Mehrfachauswahl.
                           onLongPress: () => _auswahlUmschalten(aufgabe.uid),
                         );
@@ -444,6 +473,7 @@ class AufgabenZeile extends StatelessWidget {
     this.fortschritt,
     required this.ausgewaehlt,
     this.auswahlModus = false,
+    this.kontextZiele,
     required this.onTap,
     this.onLongPress,
   });
@@ -455,6 +485,10 @@ class AufgabenZeile extends StatelessWidget {
   /// Im Mehrfachauswahl-Modus wird links ein Auswahlkreis statt der
   /// Erledigt-Checkbox gezeigt.
   final bool auswahlModus;
+
+  /// Ziele des Rechtsklick-Menüs (bei Mehrfachauswahl mehrere), sonst
+  /// nur diese Aufgabe.
+  final List<Aufgabe>? kontextZiele;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -534,7 +568,10 @@ class AufgabenZeile extends StatelessWidget {
       child: MouseRegion(
         onEnter: (_) => context.read<AppState>().setzeHover(aufgabe.uid),
         onExit: (_) => context.read<AppState>().setzeHover(null),
-        child: AufgabeKontextMenu(aufgabe: aufgabe, child: zeile),
+        child: AufgabeKontextMenu(
+          ziele: kontextZiele ?? [aufgabe],
+          child: zeile,
+        ),
       ),
     );
   }
@@ -588,11 +625,12 @@ class AufgabenZeile extends StatelessWidget {
 class AufgabeKontextMenu extends StatelessWidget {
   const AufgabeKontextMenu({
     super.key,
-    required this.aufgabe,
+    required this.ziele,
     required this.child,
   });
 
-  final Aufgabe aufgabe;
+  /// Aufgaben, auf die die Aktionen wirken (bei Mehrfachauswahl mehrere).
+  final List<Aufgabe> ziele;
   final Widget child;
 
   /// Menüeintrag mit Icon, Text und optional Kürzel (nur Desktop).
@@ -616,6 +654,36 @@ class AufgabeKontextMenu extends StatelessWidget {
     );
   }
 
+  Future<void> _loeschen(BuildContext context, AppState app) async {
+    if (ziele.length == 1) {
+      await AufgabenScreen.loeschenBestaetigen(context, ziele.first);
+      return;
+    }
+    final bestaetigt = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${ziele.length} Aufgaben löschen?'),
+        content: const Text('Auch deren Schritte werden gelöscht.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: TickdoneFarben.ueberfaellig),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (bestaetigt != true) return;
+    for (final a in ziele) {
+      await app.loescheAufgabe(a.uid);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
@@ -624,50 +692,78 @@ class AufgabeKontextMenu extends StatelessWidget {
     final andereListen = app.aufgabenlisten
         .where((l) => l.uid != app.aktiveListe?.uid)
         .toList();
-    final verschiebbar = aufgabe.parentUid == null && andereListen.isNotEmpty;
+    // Entscheidungen anhand ALLER Ziele (alle schon markiert → umschalten).
+    final alleMeinTag = ziele.every((a) => a.meinTag);
+    final alleWichtig = ziele.every((a) => a.wichtig);
+    final alleErledigt = ziele.every((a) => a.erledigt);
+    final wurzeln = ziele.where((a) => a.parentUid == null).toList();
+    final verschiebbar = wurzeln.isNotEmpty && andereListen.isNotEmpty;
+    final mehr = ziele.length > 1;
 
     return MenuAnchor(
       menuChildren: [
         _eintrag(
           icon: Icons.wb_sunny_outlined,
-          text: aufgabe.meinTag
+          text: alleMeinTag
               ? 'Aus "Mein Tag" entfernen'
               : 'Zu "Mein Tag" hinzufügen',
           kuerzel: 'Strg+T',
-          onPressed: () => app.setzeMeinTag(aufgabe.uid, !aufgabe.meinTag),
+          onPressed: () {
+            for (final a in ziele) {
+              app.setzeMeinTag(a.uid, !alleMeinTag);
+            }
+          },
         ),
         _eintrag(
-          icon: aufgabe.wichtig ? Icons.star : Icons.star_border,
-          text: aufgabe.wichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
-          onPressed: () => app.setzeWichtig(aufgabe.uid, !aufgabe.wichtig),
+          icon: alleWichtig ? Icons.star : Icons.star_border,
+          text: alleWichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
+          onPressed: () {
+            for (final a in ziele) {
+              app.setzeWichtig(a.uid, !alleWichtig);
+            }
+          },
         ),
         _eintrag(
-          icon: aufgabe.erledigt
+          icon: alleErledigt
               ? Icons.radio_button_unchecked
               : Icons.check_circle_outline,
-          text: aufgabe.erledigt
-              ? 'Als offen markieren'
-              : 'Als erledigt markieren',
+          text: alleErledigt ? 'Als offen markieren' : 'Als erledigt markieren',
           kuerzel: 'Strg+D',
-          onPressed: () => app.setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
+          onPressed: () {
+            for (final a in ziele) {
+              app.setzeErledigt(a.uid, !alleErledigt);
+            }
+          },
         ),
         const Divider(height: 1),
         _eintrag(
           icon: Icons.today,
           text: 'Heute fällig',
-          onPressed: () => app.setzeFaellig(
-              aufgabe.uid, DateTime(heute.year, heute.month, heute.day)),
+          onPressed: () {
+            for (final a in ziele) {
+              app.setzeFaellig(
+                  a.uid, DateTime(heute.year, heute.month, heute.day));
+            }
+          },
         ),
         _eintrag(
           icon: Icons.event,
           text: 'Morgen fällig',
-          onPressed: () => app.setzeFaellig(
-              aufgabe.uid, DateTime(morgen.year, morgen.month, morgen.day)),
+          onPressed: () {
+            for (final a in ziele) {
+              app.setzeFaellig(
+                  a.uid, DateTime(morgen.year, morgen.month, morgen.day));
+            }
+          },
         ),
         _eintrag(
           icon: Icons.event_busy,
           text: 'Termin entfernen',
-          onPressed: () => app.setzeFaellig(aufgabe.uid, null),
+          onPressed: () {
+            for (final a in ziele) {
+              app.setzeFaellig(a.uid, null);
+            }
+          },
         ),
         if (verschiebbar) const Divider(height: 1),
         if (verschiebbar)
@@ -679,21 +775,24 @@ class AufgabeKontextMenu extends StatelessWidget {
                 _eintrag(
                   icon: Icons.checklist,
                   text: liste.displayName,
-                  onPressed: () =>
-                      app.verschiebeAufgabe(aufgabe.uid, liste),
+                  onPressed: () {
+                    for (final a in wurzeln) {
+                      app.verschiebeAufgabe(a.uid, liste);
+                    }
+                  },
                 ),
             ],
-            child: const Text('Aufgabe verschieben in …',
-                style: TextStyle(color: TickdoneFarben.text)),
+            child: Text(
+                mehr ? 'Aufgaben verschieben in …' : 'Aufgabe verschieben in …',
+                style: const TextStyle(color: TickdoneFarben.text)),
           ),
         const Divider(height: 1),
         _eintrag(
           icon: Icons.delete_outline,
-          text: 'Aufgabe löschen',
+          text: mehr ? 'Aufgaben löschen' : 'Aufgabe löschen',
           kuerzel: 'Entf',
           rot: true,
-          onPressed: () =>
-              AufgabenScreen.loeschenBestaetigen(context, aufgabe),
+          onPressed: () => _loeschen(context, app),
         ),
       ],
       builder: (context, controller, child) => GestureDetector(
