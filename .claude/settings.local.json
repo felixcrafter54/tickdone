@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(flutter --version)",
+      "PowerShell($candidates = @\\(\"$env:USERPROFILE\\\\flutter\", \"$env:USERPROFILE\\\\fvm\", \"$env:LOCALAPPDATA\\\\flutter\", \"C:\\\\src\\\\flutter\", \"C:\\\\flutter\", \"D:\\\\flutter\", \"C:\\\\tools\\\\flutter\", \"$env:USERPROFILE\\\\dev\\\\flutter\", \"$env:USERPROFILE\\\\Documents\\\\flutter\", \"$env:USERPROFILE\\\\Downloads\\\\flutter\"\\); foreach \\($c in $candidates\\) { if \\(Test-Path \"$c\\\\bin\\\\flutter.bat\"\\) { Write-Output \"FOUND: $c\" } }; where.exe dart 2>$null; where.exe flutter 2>$null)",
+      "PowerShell(flutter doctor)",
+      "PowerShell(flutter create --project-name tickdone .)",
+      "PowerShell(flutter analyze)",
+      "PowerShell(flutter test)"
+    ]
+  }
+}
