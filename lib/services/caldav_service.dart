@@ -30,9 +30,13 @@ class CalDavService {
   /// Baut die Verbindung auf und prüft die Zugangsdaten.
   ///
   /// Probiert nacheinander: eingegebene URL → Ziel von
-  /// `<basis>/.well-known/caldav` → `<basis>/caldav` → `<basis>/radicale`
+  /// `<basis>/.well-known/caldav` → `<basis>/caldav/` → `<basis>/radicale/`
   /// (Reihenfolge aus der Spec, Abschnitt 2). Bei falschen Zugangsdaten
   /// (401) wird sofort abgebrochen, weitere Pfade bringen dann nichts.
+  ///
+  /// WICHTIG: Abschließende Slashes werden bei Kandidaten NICHT entfernt –
+  /// manche Server beantworten PROPFIND auf /caldav mit 405,
+  /// auf /caldav/ aber korrekt.
   ///
   /// Das .well-known-Ziel muss VOR connect() selbst aufgelöst werden:
   /// connect() prüft die Zugangsdaten per PROPFIND auf der Basis-URL und
@@ -44,18 +48,25 @@ class CalDavService {
     required String passwort,
   }) async {
     trennen();
-    final basis = _normalisiereUrl(serverUrl);
+    // Eingegebene URL nur um das Schema ergänzen, sonst unangetastet lassen
+    // (ein evtl. vorhandener End-Slash bleibt bewusst erhalten).
+    final eingegeben = _ergaenzeSchema(serverUrl.trim());
+    final basis = _ohneEndSlash(eingegeben);
     // Protokoll aller Versuche – landet bei Misserfolg in der Fehlermeldung,
     // damit man sieht, welcher Kandidat woran gescheitert ist.
     final diagnose = <String>[];
 
-    final kandidaten = <String>[basis];
+    final kandidaten = <String>[eingegeben];
     final wellKnownZiel =
         await _loeseWellKnownAuf(basis, benutzer, passwort, diagnose);
     if (wellKnownZiel != null && !kandidaten.contains(wellKnownZiel)) {
       kandidaten.add(wellKnownZiel);
     }
-    kandidaten.addAll(['$basis/caldav', '$basis/radicale']);
+    for (final pfad in ['$basis/caldav/', '$basis/radicale/']) {
+      if (!kandidaten.contains(pfad)) {
+        kandidaten.add(pfad);
+      }
+    }
 
     for (final url in kandidaten) {
       try {
@@ -142,9 +153,11 @@ class CalDavService {
       if (redirects.contains(status)) {
         final ziel = antwort.headers.value('location');
         if (ziel != null && ziel.isNotEmpty) {
+          // Ziel unverändert übernehmen – insbesondere den End-Slash
+          // NICHT abschneiden (sonst z.B. 405 statt 207).
           final aufgeloest = Uri.parse('$basis/').resolve(ziel).toString();
           diagnose.add('.well-known/caldav → HTTP $status nach $aufgeloest');
-          return _normalisiereUrl(aufgeloest);
+          return aufgeloest;
         }
         diagnose.add('.well-known/caldav → HTTP $status ohne Location');
         return null;
@@ -163,16 +176,21 @@ class CalDavService {
     return null;
   }
 
-  /// Ergänzt fehlendes Schema (https) und entfernt abschließende Slashes,
-  /// damit die Pfad-Kandidaten sauber angehängt werden können.
-  String _normalisiereUrl(String eingabe) {
-    var url = eingabe.trim();
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://$url';
+  /// Ergänzt fehlendes Schema (https), lässt die URL sonst unangetastet.
+  String _ergaenzeSchema(String eingabe) {
+    if (!eingabe.startsWith('http://') && !eingabe.startsWith('https://')) {
+      return 'https://$eingabe';
     }
-    while (url.endsWith('/')) {
-      url = url.substring(0, url.length - 1);
+    return eingabe;
+  }
+
+  /// Entfernt abschließende Slashes – nur für die Basis, an die
+  /// Pfad-Kandidaten angehängt werden.
+  String _ohneEndSlash(String url) {
+    var ergebnis = url;
+    while (ergebnis.endsWith('/')) {
+      ergebnis = ergebnis.substring(0, ergebnis.length - 1);
     }
-    return url;
+    return ergebnis;
   }
 }
