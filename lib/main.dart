@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'state/app_state.dart';
+import 'ui/app_theme.dart';
 import 'ui/login_screen.dart';
 
 void main() {
@@ -19,9 +20,8 @@ class TickdoneApp extends StatelessWidget {
       create: (_) => AppState(),
       child: MaterialApp(
         title: 'Tickdone',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        ),
+        // Dunkles Theme mit violettem Akzent (TICKDONE_DESIGN.md).
+        theme: tickdoneTheme(),
         home: const LoginScreen(),
       ),
     );

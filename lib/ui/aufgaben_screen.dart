@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/aufgabe.dart';
 import '../state/app_state.dart';
+import 'app_theme.dart';
 import 'aufgabe_detail_screen.dart';
 
 /// Zeigt die Wurzel-Aufgaben der geöffneten Liste.
@@ -421,6 +422,8 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       appBar: _auswahlModus ? _auswahlAppBar() : _normaleAppBar(appState),
       body: Column(
         children: [
+          // Inline-Zeile "Aufgabe hinzufügen" (Design-Doc, Abschnitt 3).
+          const _NeueAufgabeZeile(),
           if (appState.aufgabenLaden) const LinearProgressIndicator(),
           if (appState.aufgabenFehler != null)
             Padding(
@@ -442,13 +445,16 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                             appState.aufgabenLaden
                                 ? 'Lade Aufgaben …'
                                 : 'Keine Aufgaben hier. '
-                                    'Füge mit + eine hinzu.',
+                                    'Füge oben eine hinzu.',
                             textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                color: TickdoneFarben.textGedimmt),
                           ),
                         ),
                       ],
                     )
                   : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 12),
                       itemCount: aufgaben.length,
                       itemBuilder: (context, index) {
                         final aufgabe = aufgaben[index];
@@ -466,14 +472,48 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
           ),
         ],
       ),
-      floatingActionButton: _auswahlModus
-          ? null
-          : FloatingActionButton(
-              tooltip: 'Neue Aufgabe',
-              onPressed: () =>
-                  AufgabenScreen.neueAufgabeDialog(context),
-              child: const Icon(Icons.add),
-            ),
+    );
+  }
+}
+
+/// Eingabezeile "Aufgabe hinzufügen" oberhalb der Liste –
+/// Enter legt sofort an (Design-Doc, Abschnitt 3).
+class _NeueAufgabeZeile extends StatefulWidget {
+  const _NeueAufgabeZeile();
+
+  @override
+  State<_NeueAufgabeZeile> createState() => _NeueAufgabeZeileState();
+}
+
+class _NeueAufgabeZeileState extends State<_NeueAufgabeZeile> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _anlegen() async {
+    final titel = _controller.text.trim();
+    if (titel.isEmpty) return;
+    _controller.clear();
+    await context.read<AppState>().erstelleAufgabe(titel);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: TextField(
+        controller: _controller,
+        decoration: const InputDecoration(
+          hintText: 'Aufgabe hinzufügen',
+          prefixIcon: Icon(Icons.add, color: TickdoneFarben.akzent),
+          isDense: true,
+        ),
+        onSubmitted: (_) => _anlegen(),
+      ),
     );
   }
 }
@@ -497,76 +537,123 @@ class _AufgabenZeile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final farben = Theme.of(context).colorScheme;
-    return GestureDetector(
-      // Desktop: Rechtsklick öffnet das Kontextmenü.
-      onSecondaryTap: () => AufgabenScreen.kontextMenue(context, aufgabe),
-      child: ListTile(
-        selected: ausgewaehlt,
-        selectedTileColor: farben.primaryContainer.withValues(alpha: 0.4),
-        // Tippen aufs Icon hakt ab bzw. öffnet wieder – optimistisch,
-        // gespeichert wird im Hintergrund.
-        leading: IconButton(
-          icon: Icon(
-            aufgabe.erledigt
-                ? Icons.check_circle
-                : Icons.radio_button_unchecked,
-            color: aufgabe.erledigt ? farben.primary : farben.outline,
-          ),
-          tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
-          onPressed: () => context
-              .read<AppState>()
-              .setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
-        ),
-        title: Text(
-          aufgabe.titel,
-          style: aufgabe.erledigt
-              ? TextStyle(
-                  decoration: TextDecoration.lineThrough,
-                  color: farben.outline,
-                )
-              : null,
-        ),
-        subtitle: _untertitel(),
-        // Stern = als wichtig markieren (hohe Priorität).
-        trailing: IconButton(
-          icon: aufgabe.wichtig
-              ? Icon(Icons.star, color: Colors.amber.shade600)
-              : Icon(Icons.star_border, color: farben.outline),
-          tooltip: aufgabe.wichtig
-              ? 'Wichtig entfernen'
-              : 'Als wichtig markieren',
-          onPressed: () => context
-              .read<AppState>()
-              .setzeWichtig(aufgabe.uid, !aufgabe.wichtig),
-        ),
-        onTap: () {
-          if (auswahlModus) {
-            onAuswahl();
-            return;
-          }
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => AufgabeDetailScreen(uid: aufgabe.uid),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      child: GestureDetector(
+        // Desktop: Rechtsklick öffnet das Kontextmenü.
+        onSecondaryTap: () =>
+            AufgabenScreen.kontextMenue(context, aufgabe),
+        child: ListTile(
+          selected: ausgewaehlt,
+          tileColor: TickdoneFarben.flaeche,
+          selectedTileColor: TickdoneFarben.flaecheGewaehlt,
+          hoverColor: TickdoneFarben.flaecheHover,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(tickdoneRadius),
+            side: BorderSide(
+              color: ausgewaehlt
+                  ? TickdoneFarben.akzentGedimmt
+                  : TickdoneFarben.rahmen,
             ),
-          );
-        },
-        // Handy: langes Drücken startet/erweitert die Mehrfachauswahl.
-        onLongPress: onAuswahl,
+          ),
+          // Tippen aufs Icon hakt ab bzw. öffnet wieder – optimistisch,
+          // gespeichert wird im Hintergrund.
+          leading: IconButton(
+            icon: Icon(
+              aufgabe.erledigt
+                  ? Icons.check_circle
+                  : Icons.radio_button_unchecked,
+              color: aufgabe.erledigt
+                  ? TickdoneFarben.erledigt
+                  : TickdoneFarben.textGedimmt,
+            ),
+            tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
+            onPressed: () => context
+                .read<AppState>()
+                .setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
+          ),
+          title: Text(
+            aufgabe.titel,
+            style: aufgabe.erledigt
+                ? const TextStyle(
+                    decoration: TextDecoration.lineThrough,
+                    color: TickdoneFarben.textSchwach,
+                  )
+                : const TextStyle(color: TickdoneFarben.text),
+          ),
+          subtitle: _untertitel(),
+          // Stern = als wichtig markieren (hohe Priorität).
+          trailing: IconButton(
+            icon: aufgabe.wichtig
+                ? const Icon(Icons.star, color: TickdoneFarben.favorit)
+                : const Icon(Icons.star_border,
+                    color: TickdoneFarben.textGedimmt),
+            tooltip: aufgabe.wichtig
+                ? 'Wichtig entfernen'
+                : 'Als wichtig markieren',
+            onPressed: () => context
+                .read<AppState>()
+                .setzeWichtig(aufgabe.uid, !aufgabe.wichtig),
+          ),
+          onTap: () {
+            if (auswahlModus) {
+              onAuswahl();
+              return;
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AufgabeDetailScreen(uid: aufgabe.uid),
+              ),
+            );
+          },
+          // Handy: langes Drücken startet/erweitert die Mehrfachauswahl.
+          onLongPress: onAuswahl,
+        ),
       ),
     );
   }
 
-  // Meta-Zeile: Fälligkeit · Fortschritt · Notiz-Hinweis.
+  /// Meta-Zeile: Fälligkeit (rot wenn überfällig) · x von y · Notiz.
   Widget? _untertitel() {
-    final teile = <String>[
-      if (aufgabe.faellig != null) 'Fällig: ${_datum(aufgabe.faellig!)}',
-      if (fortschritt != null)
-        '${fortschritt!.erledigt} von ${fortschritt!.gesamt}',
-      if (aufgabe.notiz.isNotEmpty) 'Notiz',
-    ];
-    if (teile.isEmpty) return null;
-    return Text(teile.join(' · '));
+    final spans = <TextSpan>[];
+    if (aufgabe.faellig != null) {
+      spans.add(TextSpan(
+        text: 'Fällig: ${_datum(aufgabe.faellig!)}',
+        style: _istUeberfaellig()
+            ? const TextStyle(color: TickdoneFarben.ueberfaellig)
+            : null,
+      ));
+    }
+    if (fortschritt != null) {
+      spans.add(TextSpan(
+          text: '${fortschritt!.erledigt} von ${fortschritt!.gesamt}'));
+    }
+    if (aufgabe.notiz.isNotEmpty) {
+      spans.add(const TextSpan(text: 'Notiz'));
+    }
+    if (spans.isEmpty) return null;
+
+    final mitTrennern = <TextSpan>[];
+    for (var i = 0; i < spans.length; i++) {
+      if (i > 0) mitTrennern.add(const TextSpan(text: ' · '));
+      mitTrennern.add(spans[i]);
+    }
+    return Text.rich(
+      TextSpan(
+        style: const TextStyle(
+            color: TickdoneFarben.textGedimmt, fontSize: 12),
+        children: mitTrennern,
+      ),
+    );
+  }
+
+  /// Überfällig = Fälligkeit vor heute und noch offen.
+  bool _istUeberfaellig() {
+    final faellig = aufgabe.faellig;
+    if (faellig == null || aufgabe.erledigt) return false;
+    final jetzt = DateTime.now();
+    final heuteStart = DateTime(jetzt.year, jetzt.month, jetzt.day);
+    return faellig.isBefore(heuteStart);
   }
 
   String _datum(DateTime wert) {
