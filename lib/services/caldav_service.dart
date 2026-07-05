@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:caldav/caldav.dart';
 import 'package:dio/dio.dart';
 
+import '../models/aufgabe.dart';
+
 /// Kapselt die CalDAV-Verbindung zum Server.
 ///
 /// Der Nutzer gibt meist nur die Domain ein. Das Paket `caldav` übernimmt die
@@ -105,6 +107,26 @@ class CalDavService {
     // Manche Server melden kein supported-calendar-component-set.
     // Dann lieber alle Collections anzeigen statt gar keine.
     return mitVtodo.isEmpty ? alle : mitVtodo;
+  }
+
+  /// Lädt alle Aufgaben einer Liste – in EINEM REPORT.
+  ///
+  /// getTodos() schickt genau den calendar-query aus der Spec
+  /// (comp-filter VTODO, calendar-data + getetag, KEIN STATUS-Filter)
+  /// und liefert das unveränderte iCalendar je Aufgabe mit. Daraus
+  /// parsen wir unser eigenes Model.
+  Future<List<Aufgabe>> ladeAufgaben(Calendar liste) async {
+    final todos = await client.getTodos(liste);
+    final aufgaben = <Aufgabe>[];
+    for (final todo in todos) {
+      final roh = todo.rawIcalendar;
+      if (roh == null || roh.isEmpty) continue;
+      final aufgabe = Aufgabe.ausICalendar(roh, etag: todo.etag, href: todo.href);
+      if (aufgabe != null) {
+        aufgaben.add(aufgabe);
+      }
+    }
+    return aufgaben;
   }
 
   /// Verbindung schließen und Zustand zurücksetzen.

@@ -1,6 +1,7 @@
 import 'package:caldav/caldav.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/aufgabe.dart';
 import '../services/caldav_service.dart';
 
 /// Zentraler App-Zustand: Verbindung und geladene Aufgabenlisten.
@@ -61,10 +62,50 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ---- Aufgaben der geöffneten Liste ----
+
+  Calendar? aktiveListe;
+  List<Aufgabe> aufgaben = [];
+  bool aufgabenLaden = false;
+  String? aufgabenFehler;
+
+  /// Nur die Wurzel-Aufgaben – Schritte (Subtasks) erscheinen erst
+  /// in der Detailansicht (Spec, Abschnitt 3).
+  List<Aufgabe> get wurzelAufgaben =>
+      aufgaben.where((a) => !a.istSchritt).toList();
+
+  /// Liste öffnen und ihre Aufgaben laden.
+  Future<void> oeffneListe(Calendar liste) async {
+    aktiveListe = liste;
+    aufgaben = [];
+    aufgabenFehler = null;
+    await aufgabenNeuLaden();
+  }
+
+  /// Aufgaben der aktiven Liste (neu) vom Server holen.
+  Future<void> aufgabenNeuLaden() async {
+    final liste = aktiveListe;
+    if (liste == null || !istVerbunden) return;
+    aufgabenLaden = true;
+    aufgabenFehler = null;
+    notifyListeners();
+    try {
+      aufgaben = await _caldav.ladeAufgaben(liste);
+    } catch (fehler) {
+      aufgabenFehler = _lesbareMeldung(fehler);
+    } finally {
+      aufgabenLaden = false;
+      notifyListeners();
+    }
+  }
+
   /// Verbindung trennen und Zustand leeren.
   void abmelden() {
     _caldav.trennen();
     aufgabenlisten = [];
+    aktiveListe = null;
+    aufgaben = [];
+    aufgabenFehler = null;
     fehlermeldung = null;
     notifyListeners();
   }
