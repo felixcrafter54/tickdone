@@ -62,6 +62,10 @@ class Aufgabe {
   /// Schritte (Subtasks) sind Aufgaben mit Eltern-Verweis.
   bool get istSchritt => parentUid != null;
 
+  /// "Wichtig" (Stern) = hohe Priorität (PRIORITY 1–4).
+  /// Der alte FAVORITE-Marker aus Bestandsdaten zählt beim Lesen mit.
+  bool get wichtig => (prioritaet >= 1 && prioritaet <= 4) || favorit;
+
   /// Kopie mit geänderten Feldern – für optimistische Updates
   /// (lokal sofort anzeigen, im Hintergrund speichern).
   /// [faelligEntfernen] löscht die Fälligkeit, da null hier
@@ -119,12 +123,12 @@ class Aufgabe {
     if (vtodo == null) return null;
 
     final kategorien = vtodo.categories ?? const <String>[];
-    // Die Python-Desktop-App schreibt FELIX-MYDAY-<datum> (Design-Doc,
-    // Abschnitt 6); die Mobile-Spec nannte MYDAY-<datum>. Beim Lesen
-    // akzeptieren wir beide Formen.
+    // Geschrieben wird der neutrale Marker MYDAY-<datum> (die App soll
+    // auch von anderen genutzt werden). Beim Lesen wird zusätzlich die
+    // alte Form FELIX-MYDAY-<datum> der Python-Desktop-App erkannt.
     final tag = heute ?? DateTime.now();
     final tagesMarker = mydayMarker(tag);
-    final altMarker = 'MYDAY-${_datumsTeil(tag)}';
+    final altMarker = 'FELIX-${mydayMarker(tag)}';
 
     return Aufgabe(
       uid: vtodo.uid,
@@ -184,9 +188,8 @@ class Aufgabe {
     return puffer.toString();
   }
 
-  /// Der "Mein Tag"-Marker für ein Datum, z.B. FELIX-MYDAY-2026-07-05
-  /// (identisch zur Python-Desktop-App, Design-Doc Abschnitt 6).
-  static String mydayMarker(DateTime tag) => 'FELIX-MYDAY-${_datumsTeil(tag)}';
+  /// Der "Mein Tag"-Marker für ein Datum, z.B. MYDAY-2026-07-05.
+  static String mydayMarker(DateTime tag) => 'MYDAY-${_datumsTeil(tag)}';
 
   static String _datumsTeil(DateTime tag) {
     final monat = tag.month.toString().padLeft(2, '0');

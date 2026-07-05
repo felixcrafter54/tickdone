@@ -172,23 +172,6 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                         .setzeFaellig(widget.uid, null),
                 deleteButtonTooltipMessage: 'Fälligkeit entfernen',
               ),
-              DropdownButton<int>(
-                value: _prioStufe(aufgabe.prioritaet),
-                underline: const SizedBox.shrink(),
-                items: const [
-                  DropdownMenuItem(value: 0, child: Text('Keine Priorität')),
-                  DropdownMenuItem(value: 1, child: Text('Hoch')),
-                  DropdownMenuItem(value: 5, child: Text('Mittel')),
-                  DropdownMenuItem(value: 9, child: Text('Niedrig')),
-                ],
-                onChanged: (wert) {
-                  if (wert != null) {
-                    context
-                        .read<AppState>()
-                        .setzePrioritaet(widget.uid, wert);
-                  }
-                },
-              ),
               // "Mein Tag" umschalten – Marker verfällt über Nacht.
               FilterChip(
                 avatar: aufgabe.meinTag
@@ -199,16 +182,17 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                 onSelected: (wert) =>
                     context.read<AppState>().setzeMeinTag(widget.uid, wert),
               ),
+              // Stern = als wichtig markieren (hohe Priorität).
               IconButton(
-                icon: aufgabe.favorit
+                icon: aufgabe.wichtig
                     ? Icon(Icons.star, color: Colors.amber.shade600)
                     : Icon(Icons.star_border, color: farben.outline),
-                tooltip: aufgabe.favorit
-                    ? 'Favorit entfernen'
-                    : 'Als Favorit markieren',
+                tooltip: aufgabe.wichtig
+                    ? 'Wichtig entfernen'
+                    : 'Als wichtig markieren',
                 onPressed: () => context
                     .read<AppState>()
-                    .setzeFavorit(widget.uid, !aufgabe.favorit),
+                    .setzeWichtig(widget.uid, !aufgabe.wichtig),
               ),
             ],
           ),
@@ -323,14 +307,6 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
         ],
       ),
     );
-  }
-
-  /// Priorität aufs Dropdown-Raster abbilden (1–4 hoch, 5 mittel, 6–9 niedrig).
-  int _prioStufe(int prioritaet) {
-    if (prioritaet == 0) return 0;
-    if (prioritaet <= 4) return 1;
-    if (prioritaet == 5) return 5;
-    return 9;
   }
 
   String _datum(DateTime wert) {

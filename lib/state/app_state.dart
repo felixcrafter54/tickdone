@@ -9,7 +9,7 @@ import '../services/vtodo_patch.dart';
 enum Sortierung {
   manuell('Manuell'),
   faelligkeit('Fälligkeit'),
-  prioritaet('Priorität'),
+  wichtig('Wichtig'),
   titel('Titel'),
   erstellt('Erstellt');
 
@@ -22,7 +22,7 @@ enum AufgabenFilter {
   alle('Alle'),
   offen('Offen'),
   erledigt('Erledigt'),
-  favoriten('Favoriten');
+  wichtig('Wichtig');
 
   const AufgabenFilter(this.anzeige);
   final String anzeige;
@@ -147,7 +147,7 @@ class AppState extends ChangeNotifier {
         AufgabenFilter.alle => true,
         AufgabenFilter.offen => !a.erledigt,
         AufgabenFilter.erledigt => a.erledigt,
-        AufgabenFilter.favoriten => a.favorit,
+        AufgabenFilter.wichtig => a.wichtig,
       };
     }).toList();
     gefiltert.sort(_vergleicher(sortierung));
@@ -168,11 +168,11 @@ class AppState extends ChangeNotifier {
           fehlendeAnsEnde(a.sortOrder, b.sortOrder, (x, y) => x.compareTo(y)),
       Sortierung.faelligkeit => (a, b) =>
           fehlendeAnsEnde(a.faellig, b.faellig, (x, y) => x.compareTo(y)),
-      // 0 = keine Priorität gilt als fehlend, 1 (hoch) kommt zuerst.
-      Sortierung.prioritaet => (a, b) => fehlendeAnsEnde(
-          a.prioritaet == 0 ? null : a.prioritaet,
-          b.prioritaet == 0 ? null : b.prioritaet,
-          (x, y) => x.compareTo(y)),
+      // Wichtige (Stern) zuerst.
+      Sortierung.wichtig => (a, b) {
+        if (a.wichtig == b.wichtig) return 0;
+        return a.wichtig ? -1 : 1;
+      },
       Sortierung.titel => (a, b) =>
           a.titel.toLowerCase().compareTo(b.titel.toLowerCase()),
       // Neueste zuerst.
@@ -272,14 +272,6 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  /// Priorität ändern (sofort speichern).
-  Future<void> setzePrioritaet(String uid, int prioritaet) =>
-      _aendereUndSpeichere(
-        uid,
-        lokal: (a) => a.kopieMit(prioritaet: prioritaet),
-        patch: prioritaetPatch(prioritaet),
-      );
-
   /// Fälligkeit setzen oder entfernen (sofort speichern).
   Future<void> setzeFaellig(String uid, DateTime? datum) =>
       _aendereUndSpeichere(
@@ -290,12 +282,15 @@ class AppState extends ChangeNotifier {
         patch: faelligPatch(datum),
       );
 
-  /// Favorit setzen/entfernen (sofort speichern).
-  Future<void> setzeFavorit(String uid, bool favorit) =>
+  /// "Wichtig" (Stern) setzen/entfernen – gespeichert als PRIORITY 1.
+  Future<void> setzeWichtig(String uid, bool wichtig) =>
       _aendereUndSpeichere(
         uid,
-        lokal: (a) => a.kopieMit(favorit: favorit),
-        patch: favoritPatch(favorit),
+        lokal: (a) => a.kopieMit(
+          prioritaet: wichtig ? 1 : 0,
+          favorit: wichtig ? null : false,
+        ),
+        patch: wichtigPatch(wichtig),
       );
 
   /// "Mein Tag" setzen/entfernen (sofort speichern).

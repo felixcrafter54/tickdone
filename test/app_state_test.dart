@@ -92,7 +92,7 @@ void main() {
       ];
     });
 
-    test('Filter offen/erledigt/Favoriten', () {
+    test('Filter offen/erledigt/wichtig', () {
       state.filter = AufgabenFilter.offen;
       expect(state.wurzelAufgaben.map((a) => a.uid),
           isNot(contains('a-erledigt')));
@@ -100,8 +100,10 @@ void main() {
       state.filter = AufgabenFilter.erledigt;
       expect(state.wurzelAufgaben.map((a) => a.uid), ['a-erledigt']);
 
-      state.filter = AufgabenFilter.favoriten;
-      expect(state.wurzelAufgaben.map((a) => a.uid), ['c-favorit']);
+      // Wichtig = hohe Priorität ODER alter FAVORITE-Marker.
+      state.filter = AufgabenFilter.wichtig;
+      expect(state.wurzelAufgaben.map((a) => a.uid).toSet(),
+          {'a-erledigt', 'c-favorit'});
     });
 
     test('Sortierung manuell: sortOrder, ohne Wert ans Ende', () {
@@ -116,10 +118,13 @@ void main() {
           ['c-favorit', 'b-offen', 'a-erledigt']);
     });
 
-    test('Sortierung Priorität: hoch zuerst, keine ans Ende', () {
-      state.sortierung = Sortierung.prioritaet;
-      expect(state.wurzelAufgaben.map((a) => a.uid),
-          ['a-erledigt', 'b-offen', 'c-favorit']);
+    test('Sortierung Wichtig: wichtige zuerst', () {
+      state.sortierung = Sortierung.wichtig;
+      final uids = state.wurzelAufgaben.map((a) => a.uid).toList();
+      // a-erledigt (PRIORITY 1) und c-favorit (FAVORITE) sind wichtig,
+      // b-offen (PRIORITY 5) nicht.
+      expect(uids.sublist(0, 2).toSet(), {'a-erledigt', 'c-favorit'});
+      expect(uids.last, 'b-offen');
     });
 
     test('Sortierung Titel alphabetisch', () {

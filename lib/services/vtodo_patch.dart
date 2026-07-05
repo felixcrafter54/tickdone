@@ -73,31 +73,27 @@ void _setzeText(VTodo vtodo, String name, String? wert) {
   );
 }
 
-/// Priorität ändern (0 = keine = Property entfernen).
-IcalPatch prioritaetPatch(int prioritaet) => (ical) => patcheVTodo(
-    ical,
-    (vtodo) => vtodo.priorityInt = prioritaet == 0 ? null : prioritaet);
-
 /// Fälligkeit setzen oder (mit null) entfernen.
 IcalPatch faelligPatch(DateTime? datum) =>
     (ical) => patcheVTodo(ical, (vtodo) => vtodo.due = datum);
 
-/// Favorit setzen/entfernen – über den Marker FAVORITE in CATEGORIES
-/// (Spec, Abschnitt 2). Andere Kategorien bleiben unangetastet.
-IcalPatch favoritPatch(bool favorit) =>
+/// "Wichtig" (Stern) setzen/entfernen – gespeichert als hohe Priorität
+/// (PRIORITY 1). Beim Entfernen wird auch der FAVORITE-Marker aus
+/// Bestandsdaten mit ausgeräumt, sonst bliebe der Stern hängen.
+IcalPatch wichtigPatch(bool wichtig) =>
     (ical) => patcheVTodo(ical, (vtodo) {
-          final kategorien = List<String>.from(vtodo.categories ?? const [])
-            ..removeWhere((k) => k == 'FAVORITE');
-          if (favorit) {
-            kategorien.add('FAVORITE');
+          vtodo.priorityInt = wichtig ? 1 : null;
+          if (!wichtig) {
+            final kategorien =
+                List<String>.from(vtodo.categories ?? const [])
+                  ..removeWhere((k) => k == 'FAVORITE');
+            vtodo.categories = kategorien.isEmpty ? null : kategorien;
           }
-          vtodo.categories = kategorien.isEmpty ? null : kategorien;
         });
 
-/// "Mein Tag" setzen/entfernen – Marker `FELIX-MYDAY-<heute>` in CATEGORIES
-/// (identisch zur Python-Desktop-App). Alte MYDAY-Marker – auch in der
-/// alten Schreibweise ohne FELIX-Präfix – werden dabei immer entfernt,
-/// so verfällt die Markierung über Nacht von selbst.
+/// "Mein Tag" setzen/entfernen – Marker `MYDAY-<heute>` in CATEGORIES.
+/// Alte MYDAY-Marker (auch die alte Schreibweise FELIX-MYDAY-…) werden
+/// dabei immer entfernt, so verfällt die Markierung über Nacht von selbst.
 IcalPatch meinTagPatch(bool meinTag, {DateTime? heute}) =>
     (ical) => patcheVTodo(ical, (vtodo) {
           final kategorien = List<String>.from(vtodo.categories ?? const [])

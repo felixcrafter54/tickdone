@@ -7,10 +7,13 @@ import 'aufgabe_detail_screen.dart';
 
 /// Zeigt die Wurzel-Aufgaben der geöffneten Liste.
 ///
-/// Schritte (Subtasks) erscheinen hier bewusst NICHT – die stehen in der
-/// Detailansicht. Abhaken: aufs Status-Icon tippen (optimistisch, ohne
-/// Neuladen). Neue Aufgabe: Plus-Button.
-class AufgabenScreen extends StatelessWidget {
+/// Bedienung:
+/// - Tippen aufs Status-Icon = abhaken (optimistisch, ohne Neuladen).
+/// - Stern = als wichtig markieren (hohe Priorität).
+/// - Langes Drücken = Mehrfachauswahl (Aktionen oben rechts).
+/// - Rechtsklick (Desktop) = Kontextmenü mit Schnellaktionen.
+/// - Plus-Button = neue Aufgabe.
+class AufgabenScreen extends StatefulWidget {
   const AufgabenScreen({super.key});
 
   /// Dialog für eine neue Aufgabe (bzw. einen Schritt, siehe Detailansicht).
@@ -50,7 +53,7 @@ class AufgabenScreen extends StatelessWidget {
   }
 
   /// Kontextmenü einer Aufgabe (Design-Doc, Abschnitt 5) –
-  /// auf Mobile per langem Tippen.
+  /// auf dem Desktop per Rechtsklick.
   static Future<void> kontextMenue(
     BuildContext context,
     Aufgabe aufgabe,
@@ -80,12 +83,12 @@ class AufgabenScreen extends StatelessWidget {
               ),
               ListTile(
                 leading: Icon(
-                    aufgabe.favorit ? Icons.star : Icons.star_border),
-                title: Text(aufgabe.favorit
+                    aufgabe.wichtig ? Icons.star : Icons.star_border),
+                title: Text(aufgabe.wichtig
                     ? 'Wichtig entfernen'
                     : 'Als wichtig markieren'),
                 onTap: () => schliessenUnd(() =>
-                    appState.setzeFavorit(aufgabe.uid, !aufgabe.favorit)),
+                    appState.setzeWichtig(aufgabe.uid, !aufgabe.wichtig)),
               ),
               ListTile(
                 leading: Icon(aufgabe.erledigt
@@ -102,7 +105,8 @@ class AufgabenScreen extends StatelessWidget {
                 leading: const Icon(Icons.today),
                 title: const Text('Heute fällig'),
                 onTap: () => schliessenUnd(() => appState.setzeFaellig(
-                    aufgabe.uid, DateTime(heute.year, heute.month, heute.day))),
+                    aufgabe.uid,
+                    DateTime(heute.year, heute.month, heute.day))),
               ),
               ListTile(
                 leading: const Icon(Icons.event),
@@ -219,52 +223,202 @@ class AufgabenScreen extends StatelessWidget {
   }
 
   @override
+  State<AufgabenScreen> createState() => _AufgabenScreenState();
+}
+
+class _AufgabenScreenState extends State<AufgabenScreen> {
+  /// UIDs der ausgewählten Aufgaben (Mehrfachauswahl auf dem Handy).
+  final Set<String> _auswahl = {};
+
+  bool get _auswahlModus => _auswahl.isNotEmpty;
+
+  void _auswahlUmschalten(String uid) {
+    setState(() {
+      if (!_auswahl.remove(uid)) {
+        _auswahl.add(uid);
+      }
+    });
+  }
+
+  void _auswahlBeenden() => setState(_auswahl.clear);
+
+  List<Aufgabe> _ausgewaehlteAufgaben(AppState appState) => [
+        for (final uid in _auswahl)
+          if (appState.aufgabeMitUid(uid) != null)
+            appState.aufgabeMitUid(uid)!,
+      ];
+
+  /// "Mein Tag" für die Auswahl: sind schon alle markiert, wird
+  /// entfernt – sonst gesetzt.
+  Future<void> _auswahlMeinTag() async {
+    final appState = context.read<AppState>();
+    final aufgaben = _ausgewaehlteAufgaben(appState);
+    final alleMarkiert = aufgaben.every((a) => a.meinTag);
+    for (final aufgabe in aufgaben) {
+      await appState.setzeMeinTag(aufgabe.uid, !alleMarkiert);
+    }
+    _auswahlBeenden();
+  }
+
+  /// Fälligkeit für alle ausgewählten Aufgaben setzen.
+  Future<void> _auswahlFaellig() async {
+    final heute = DateTime.now();
+    final datum = await showDatePicker(
+      context: context,
+      initialDate: heute,
+      firstDate: DateTime(heute.year - 1),
+      lastDate: DateTime(heute.year + 10),
+    );
+    if (datum == null || !mounted) return;
+    final appState = context.read<AppState>();
+    for (final aufgabe in _ausgewaehlteAufgaben(appState)) {
+      await appState.setzeFaellig(aufgabe.uid, datum);
+    }
+    _auswahlBeenden();
+  }
+
+  /// "Wichtig" für die Auswahl (analog zu Mein Tag).
+  Future<void> _auswahlWichtig() async {
+    final appState = context.read<AppState>();
+    final aufgaben = _ausgewaehlteAufgaben(appState);
+    final alleWichtig = aufgaben.every((a) => a.wichtig);
+    for (final aufgabe in aufgaben) {
+      await appState.setzeWichtig(aufgabe.uid, !alleWichtig);
+    }
+    _auswahlBeenden();
+  }
+
+  void _alleAuswaehlen() {
+    final appState = context.read<AppState>();
+    setState(() {
+      _auswahl.addAll(appState.wurzelAufgaben.map((a) => a.uid));
+    });
+  }
+
+  Future<void> _auswahlLoeschen() async {
+    final anzahl = _auswahl.length;
+    final bestaetigt = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('$anzahl Aufgaben löschen?'),
+        content: const Text('Auch deren Schritte werden gelöscht.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (bestaetigt != true || !mounted) return;
+    final appState = context.read<AppState>();
+    for (final uid in _auswahl.toList()) {
+      await appState.loescheAufgabe(uid);
+    }
+    _auswahlBeenden();
+  }
+
+  /// AppBar im Auswahlmodus: Sonne (Mein Tag), Kalender (Fälligkeit),
+  /// Drei-Punkte-Menü (Alle auswählen, Wichtig, Löschen).
+  AppBar _auswahlAppBar() {
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        tooltip: 'Auswahl beenden',
+        onPressed: _auswahlBeenden,
+      ),
+      title: Text('${_auswahl.length} ausgewählt'),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.wb_sunny_outlined),
+          tooltip: 'Mein Tag',
+          onPressed: _auswahlMeinTag,
+        ),
+        IconButton(
+          icon: const Icon(Icons.event),
+          tooltip: 'Fälligkeit setzen',
+          onPressed: _auswahlFaellig,
+        ),
+        PopupMenuButton<void Function()>(
+          onSelected: (aktion) => aktion(),
+          itemBuilder: (menuContext) => [
+            PopupMenuItem(
+              value: _alleAuswaehlen,
+              child: const Text('Alle auswählen'),
+            ),
+            PopupMenuItem(
+              value: _auswahlWichtig,
+              child: const Text('Als wichtig markieren'),
+            ),
+            PopupMenuItem(
+              value: _auswahlLoeschen,
+              child: Text('Löschen',
+                  style: TextStyle(
+                      color: Theme.of(menuContext).colorScheme.error)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  AppBar _normaleAppBar(AppState appState) {
+    return AppBar(
+      title: Text(appState.aktiveListe?.displayName ?? 'Aufgaben'),
+      actions: [
+        // Filter: alle / offen / erledigt / wichtig
+        PopupMenuButton<AufgabenFilter>(
+          icon: Icon(appState.filter == AufgabenFilter.alle
+              ? Icons.filter_list
+              : Icons.filter_list_alt),
+          tooltip: 'Filtern',
+          onSelected: (wert) => context.read<AppState>().setzeFilter(wert),
+          itemBuilder: (_) => [
+            for (final wert in AufgabenFilter.values)
+              CheckedPopupMenuItem(
+                value: wert,
+                checked: appState.filter == wert,
+                child: Text(wert.anzeige),
+              ),
+          ],
+        ),
+        // Sortierung: manuell / Fälligkeit / Wichtig / Titel / Erstellt
+        PopupMenuButton<Sortierung>(
+          icon: const Icon(Icons.sort),
+          tooltip: 'Sortieren',
+          onSelected: (wert) =>
+              context.read<AppState>().setzeSortierung(wert),
+          itemBuilder: (_) => [
+            for (final wert in Sortierung.values)
+              CheckedPopupMenuItem(
+                value: wert,
+                checked: appState.sortierung == wert,
+                child: Text(wert.anzeige),
+              ),
+          ],
+        ),
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Aktualisieren',
+          onPressed: () => context.read<AppState>().aufgabenNeuLaden(),
+        ),
+      ],
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final aufgaben = appState.wurzelAufgaben;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(appState.aktiveListe?.displayName ?? 'Aufgaben'),
-        actions: [
-          // Filter: alle / offen / erledigt / Favoriten
-          PopupMenuButton<AufgabenFilter>(
-            icon: Icon(appState.filter == AufgabenFilter.alle
-                ? Icons.filter_list
-                : Icons.filter_list_alt),
-            tooltip: 'Filtern',
-            onSelected: (wert) =>
-                context.read<AppState>().setzeFilter(wert),
-            itemBuilder: (_) => [
-              for (final wert in AufgabenFilter.values)
-                CheckedPopupMenuItem(
-                  value: wert,
-                  checked: appState.filter == wert,
-                  child: Text(wert.anzeige),
-                ),
-            ],
-          ),
-          // Sortierung: manuell / Fälligkeit / Priorität / Titel / Erstellt
-          PopupMenuButton<Sortierung>(
-            icon: const Icon(Icons.sort),
-            tooltip: 'Sortieren',
-            onSelected: (wert) =>
-                context.read<AppState>().setzeSortierung(wert),
-            itemBuilder: (_) => [
-              for (final wert in Sortierung.values)
-                CheckedPopupMenuItem(
-                  value: wert,
-                  checked: appState.sortierung == wert,
-                  child: Text(wert.anzeige),
-                ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Aktualisieren',
-            onPressed: () => context.read<AppState>().aufgabenNeuLaden(),
-          ),
-        ],
-      ),
+      appBar: _auswahlModus ? _auswahlAppBar() : _normaleAppBar(appState),
       body: Column(
         children: [
           if (appState.aufgabenLaden) const LinearProgressIndicator(),
@@ -287,7 +441,8 @@ class AufgabenScreen extends StatelessWidget {
                           child: Text(
                             appState.aufgabenLaden
                                 ? 'Lade Aufgaben …'
-                                : 'Keine Aufgaben in dieser Liste.',
+                                : 'Keine Aufgaben hier. '
+                                    'Füge mit + eine hinzu.',
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -301,6 +456,9 @@ class AufgabenScreen extends StatelessWidget {
                           aufgabe: aufgabe,
                           fortschritt:
                               appState.fortschrittVon(aufgabe.uid),
+                          ausgewaehlt: _auswahl.contains(aufgabe.uid),
+                          auswahlModus: _auswahlModus,
+                          onAuswahl: () => _auswahlUmschalten(aufgabe.uid),
                         );
                       },
                     ),
@@ -308,93 +466,107 @@ class AufgabenScreen extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Neue Aufgabe',
-        onPressed: () => neueAufgabeDialog(context),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _auswahlModus
+          ? null
+          : FloatingActionButton(
+              tooltip: 'Neue Aufgabe',
+              onPressed: () =>
+                  AufgabenScreen.neueAufgabeDialog(context),
+              child: const Icon(Icons.add),
+            ),
     );
   }
 }
 
-/// Eine Zeile der Aufgabenliste: Status-Icon, Titel, Fortschritt der
-/// Schritte ("x von y"), Fälligkeit, Favorit.
+/// Eine Zeile der Aufgabenliste: Status-Icon, Titel, Meta-Zeile
+/// (Fälligkeit · x von y · Notiz), Stern (wichtig).
 class _AufgabenZeile extends StatelessWidget {
-  const _AufgabenZeile({required this.aufgabe, this.fortschritt});
+  const _AufgabenZeile({
+    required this.aufgabe,
+    this.fortschritt,
+    required this.ausgewaehlt,
+    required this.auswahlModus,
+    required this.onAuswahl,
+  });
 
   final Aufgabe aufgabe;
   final ({int erledigt, int gesamt})? fortschritt;
+  final bool ausgewaehlt;
+  final bool auswahlModus;
+  final VoidCallback onAuswahl;
 
   @override
   Widget build(BuildContext context) {
     final farben = Theme.of(context).colorScheme;
-    return ListTile(
-      // Tippen aufs Icon hakt ab bzw. öffnet wieder – optimistisch,
-      // gespeichert wird im Hintergrund.
-      leading: IconButton(
-        icon: Icon(
-          aufgabe.erledigt
-              ? Icons.check_circle
-              : Icons.radio_button_unchecked,
-          color: aufgabe.erledigt ? farben.primary : farben.outline,
-        ),
-        tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
-        onPressed: () => context
-            .read<AppState>()
-            .setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
-      ),
-      title: Text(
-        aufgabe.titel,
-        style: aufgabe.erledigt
-            ? TextStyle(
-                decoration: TextDecoration.lineThrough,
-                color: farben.outline,
-              )
-            : null,
-      ),
-      subtitle: _untertitel(),
-      // Stern antippen = Favorit umschalten (Marker in CATEGORIES).
-      trailing: IconButton(
-        icon: aufgabe.favorit
-            ? Icon(Icons.star, color: Colors.amber.shade600)
-            : Icon(Icons.star_border, color: farben.outline),
-        tooltip: aufgabe.favorit
-            ? 'Favorit entfernen'
-            : 'Als Favorit markieren',
-        onPressed: () => context
-            .read<AppState>()
-            .setzeFavorit(aufgabe.uid, !aufgabe.favorit),
-      ),
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => AufgabeDetailScreen(uid: aufgabe.uid),
+    return GestureDetector(
+      // Desktop: Rechtsklick öffnet das Kontextmenü.
+      onSecondaryTap: () => AufgabenScreen.kontextMenue(context, aufgabe),
+      child: ListTile(
+        selected: ausgewaehlt,
+        selectedTileColor: farben.primaryContainer.withValues(alpha: 0.4),
+        // Tippen aufs Icon hakt ab bzw. öffnet wieder – optimistisch,
+        // gespeichert wird im Hintergrund.
+        leading: IconButton(
+          icon: Icon(
+            aufgabe.erledigt
+                ? Icons.check_circle
+                : Icons.radio_button_unchecked,
+            color: aufgabe.erledigt ? farben.primary : farben.outline,
           ),
-        );
-      },
-      // Kontextmenü mit Schnellaktionen (Design-Doc, Abschnitt 5).
-      onLongPress: () => AufgabenScreen.kontextMenue(context, aufgabe),
+          tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
+          onPressed: () => context
+              .read<AppState>()
+              .setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
+        ),
+        title: Text(
+          aufgabe.titel,
+          style: aufgabe.erledigt
+              ? TextStyle(
+                  decoration: TextDecoration.lineThrough,
+                  color: farben.outline,
+                )
+              : null,
+        ),
+        subtitle: _untertitel(),
+        // Stern = als wichtig markieren (hohe Priorität).
+        trailing: IconButton(
+          icon: aufgabe.wichtig
+              ? Icon(Icons.star, color: Colors.amber.shade600)
+              : Icon(Icons.star_border, color: farben.outline),
+          tooltip: aufgabe.wichtig
+              ? 'Wichtig entfernen'
+              : 'Als wichtig markieren',
+          onPressed: () => context
+              .read<AppState>()
+              .setzeWichtig(aufgabe.uid, !aufgabe.wichtig),
+        ),
+        onTap: () {
+          if (auswahlModus) {
+            onAuswahl();
+            return;
+          }
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AufgabeDetailScreen(uid: aufgabe.uid),
+            ),
+          );
+        },
+        // Handy: langes Drücken startet/erweitert die Mehrfachauswahl.
+        onLongPress: onAuswahl,
+      ),
     );
   }
 
-  // Meta-Zeile nach Design-Doc, Abschnitt 3:
-  // Fälligkeit · Priorität · Fortschritt · Notiz-Hinweis
+  // Meta-Zeile: Fälligkeit · Fortschritt · Notiz-Hinweis.
   Widget? _untertitel() {
     final teile = <String>[
       if (aufgabe.faellig != null) 'Fällig: ${_datum(aufgabe.faellig!)}',
-      if (aufgabe.prioritaet != 0) _prioritaetsLabel(aufgabe.prioritaet),
       if (fortschritt != null)
         '${fortschritt!.erledigt} von ${fortschritt!.gesamt}',
       if (aufgabe.notiz.isNotEmpty) 'Notiz',
     ];
     if (teile.isEmpty) return null;
     return Text(teile.join(' · '));
-  }
-
-  String _prioritaetsLabel(int prioritaet) {
-    if (prioritaet <= 4) return 'Hohe Priorität';
-    if (prioritaet == 5) return 'Mittlere Priorität';
-    return 'Niedrige Priorität';
   }
 
   String _datum(DateTime wert) {
