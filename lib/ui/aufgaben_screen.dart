@@ -25,7 +25,22 @@ bool get istDesktop =>
 /// - Rechtsklick (Desktop) = Kontextmenü mit Schnellaktionen.
 /// - Plus-Button = neue Aufgabe.
 class AufgabenScreen extends StatefulWidget {
-  const AufgabenScreen({super.key});
+  const AufgabenScreen({
+    super.key,
+    this.eingebettet = false,
+    this.onOeffneDetail,
+    this.neueAufgabeFokus,
+  });
+
+  /// true = mittlere Spalte im Drei-Spalten-Layout: Antippen wählt die
+  /// Aufgabe für den Detailbereich, statt eine Detail-Route zu pushen.
+  final bool eingebettet;
+
+  /// Callback beim Antippen einer Aufgabe im eingebetteten Modus.
+  final void Function(String uid)? onOeffneDetail;
+
+  /// Optionaler Fokus für die "Aufgabe hinzufügen"-Zeile (Strg+N).
+  final FocusNode? neueAufgabeFokus;
 
   /// Dialog für eine neue Aufgabe (bzw. einen Schritt, siehe Detailansicht).
   static Future<void> neueAufgabeDialog(
@@ -297,7 +312,7 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       body: Column(
         children: [
           // Inline-Zeile "Aufgabe hinzufügen" (Design-Doc, Abschnitt 3).
-          const NeueAufgabeZeile(),
+          NeueAufgabeZeile(focusNode: widget.neueAufgabeFokus),
           if (appState.aufgabenLaden) const LinearProgressIndicator(),
           if (appState.aufgabenFehler != null)
             Padding(
@@ -332,14 +347,22 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                       itemCount: aufgaben.length,
                       itemBuilder: (context, index) {
                         final aufgabe = aufgaben[index];
+                        // Highlight: im Auswahlmodus die Ausgewählten,
+                        // sonst (eingebettet) die im Detail geöffnete.
+                        final markiert = _auswahlModus
+                            ? _auswahl.contains(aufgabe.uid)
+                            : widget.eingebettet &&
+                                appState.aktiveAufgabeUid == aufgabe.uid;
                         return AufgabenZeile(
                           aufgabe: aufgabe,
-                          fortschritt:
-                              appState.fortschrittVon(aufgabe.uid),
-                          ausgewaehlt: _auswahl.contains(aufgabe.uid),
+                          fortschritt: appState.fortschrittVon(aufgabe.uid),
+                          ausgewaehlt: markiert,
+                          auswahlModus: _auswahlModus,
                           onTap: () {
                             if (_auswahlModus) {
                               _auswahlUmschalten(aufgabe.uid);
+                            } else if (widget.eingebettet) {
+                              widget.onOeffneDetail?.call(aufgabe.uid);
                             } else {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
@@ -349,7 +372,7 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                               );
                             }
                           },
-                          // Handy: langes Drücken = Mehrfachauswahl.
+                          // Langes Drücken (Touch) = Mehrfachauswahl.
                           onLongPress: () => _auswahlUmschalten(aufgabe.uid),
                         );
                       },
@@ -420,6 +443,7 @@ class AufgabenZeile extends StatelessWidget {
     required this.aufgabe,
     this.fortschritt,
     required this.ausgewaehlt,
+    this.auswahlModus = false,
     required this.onTap,
     this.onLongPress,
   });
@@ -427,6 +451,10 @@ class AufgabenZeile extends StatelessWidget {
   final Aufgabe aufgabe;
   final ({int erledigt, int gesamt})? fortschritt;
   final bool ausgewaehlt;
+
+  /// Im Mehrfachauswahl-Modus wird links ein Auswahlkreis statt der
+  /// Erledigt-Checkbox gezeigt.
+  final bool auswahlModus;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -445,22 +473,35 @@ class AufgabenZeile extends StatelessWidget {
               : TickdoneFarben.rahmen,
         ),
       ),
-      // Tippen aufs Icon hakt ab bzw. öffnet wieder – optimistisch,
-      // gespeichert wird im Hintergrund.
-      leading: IconButton(
-        icon: Icon(
-          aufgabe.erledigt
-              ? Icons.check_circle
-              : Icons.radio_button_unchecked,
-          color: aufgabe.erledigt
-              ? TickdoneFarben.erledigt
-              : TickdoneFarben.textGedimmt,
-        ),
-        tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
-        onPressed: () => context
-            .read<AppState>()
-            .setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
-      ),
+      // Im Auswahlmodus: Auswahlkreis (gefüllt = markiert). Sonst:
+      // Tippen aufs Icon hakt ab bzw. öffnet wieder (optimistisch).
+      leading: auswahlModus
+          ? IconButton(
+              icon: Icon(
+                ausgewaehlt
+                    ? Icons.check_circle
+                    : Icons.radio_button_unchecked,
+                color: ausgewaehlt
+                    ? TickdoneFarben.akzent
+                    : TickdoneFarben.textGedimmt,
+              ),
+              tooltip: ausgewaehlt ? 'Abwählen' : 'Auswählen',
+              onPressed: onTap,
+            )
+          : IconButton(
+              icon: Icon(
+                aufgabe.erledigt
+                    ? Icons.check_circle
+                    : Icons.radio_button_unchecked,
+                color: aufgabe.erledigt
+                    ? TickdoneFarben.erledigt
+                    : TickdoneFarben.textGedimmt,
+              ),
+              tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
+              onPressed: () => context
+                  .read<AppState>()
+                  .setzeErledigt(aufgabe.uid, !aufgabe.erledigt),
+            ),
       title: Text(
         aufgabe.titel,
         style: aufgabe.erledigt

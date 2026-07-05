@@ -60,6 +60,10 @@ class AppState extends ChangeNotifier {
         passwort: passwort,
       );
       aufgabenlisten = await _caldav.ladeAufgabenlisten();
+      // Standardliste direkt öffnen, Detailbereich bleibt zu.
+      if (aufgabenlisten.isNotEmpty) {
+        await oeffneListe(aufgabenlisten.first);
+      }
       return true;
     } catch (fehler) {
       fehlermeldung = _lesbareMeldung(fehler);

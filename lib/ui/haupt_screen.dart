@@ -172,7 +172,20 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
                 const SizedBox(width: 280, child: _ListenSpalte()),
                 const VerticalDivider(width: 1),
                 Expanded(
-                  child: _AufgabenSpalte(neueAufgabeFokus: _neueAufgabeFokus),
+                  child: app.aktiveListe == null
+                      ? const Center(
+                          child: Text('Wähle links eine Liste.',
+                              style: TextStyle(
+                                  color: TickdoneFarben.textGedimmt)),
+                        )
+                      : AufgabenScreen(
+                          // Neuaufbau bei Listenwechsel (frische Auswahl).
+                          key: ValueKey(app.aktiveListe!.uid),
+                          eingebettet: true,
+                          neueAufgabeFokus: _neueAufgabeFokus,
+                          onOeffneDetail: (uid) =>
+                              context.read<AppState>().waehleAufgabe(uid),
+                        ),
                 ),
                 const VerticalDivider(width: 1),
                 SizedBox(
@@ -321,100 +334,6 @@ class _ListenSpalte extends StatelessWidget {
           const SizedBox(height: 8),
         ],
       ),
-    );
-  }
-}
-
-/// Mittlere Spalte: Aufgaben der aktiven Liste.
-class _AufgabenSpalte extends StatelessWidget {
-  const _AufgabenSpalte({required this.neueAufgabeFokus});
-
-  final FocusNode neueAufgabeFokus;
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-    if (app.aktiveListe == null) {
-      return const Center(
-        child: Text('Wähle links eine Liste.',
-            style: TextStyle(color: TickdoneFarben.textGedimmt)),
-      );
-    }
-    final aufgaben = app.wurzelAufgaben;
-    return Column(
-      children: [
-        // Kopfbereich: Listenname + Sortieren/Filtern/Aktualisieren.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(app.aktiveListe!.displayName,
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold)),
-              ),
-              PopupMenuButton<Sortierung>(
-                icon: const Icon(Icons.sort),
-                tooltip: 'Sortieren',
-                onSelected: (w) => context.read<AppState>().setzeSortierung(w),
-                itemBuilder: (_) => [
-                  for (final w in Sortierung.values)
-                    CheckedPopupMenuItem(
-                      value: w,
-                      checked: app.sortierung == w,
-                      child: Text(w.anzeige),
-                    ),
-                ],
-              ),
-              PopupMenuButton<AufgabenFilter>(
-                icon: Icon(app.filter == AufgabenFilter.alle
-                    ? Icons.filter_list
-                    : Icons.filter_list_alt),
-                tooltip: 'Filtern',
-                onSelected: (w) => context.read<AppState>().setzeFilter(w),
-                itemBuilder: (_) => [
-                  for (final w in AufgabenFilter.values)
-                    CheckedPopupMenuItem(
-                      value: w,
-                      checked: app.filter == w,
-                      child: Text(w.anzeige),
-                    ),
-                ],
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Aktualisieren (F5)',
-                onPressed: () => context.read<AppState>().aufgabenNeuLaden(),
-              ),
-            ],
-          ),
-        ),
-        NeueAufgabeZeile(focusNode: neueAufgabeFokus),
-        if (app.aufgabenLaden) const LinearProgressIndicator(),
-        Expanded(
-          child: aufgaben.isEmpty
-              ? const Center(
-                  child: Text('Keine Aufgaben hier. Füge oben eine hinzu.',
-                      style: TextStyle(color: TickdoneFarben.textGedimmt)),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  itemCount: aufgaben.length,
-                  itemBuilder: (context, index) {
-                    final aufgabe = aufgaben[index];
-                    return AufgabenZeile(
-                      aufgabe: aufgabe,
-                      fortschritt: app.fortschrittVon(aufgabe.uid),
-                      ausgewaehlt: app.aktiveAufgabeUid == aufgabe.uid,
-                      // Desktop: Antippen wählt die Aufgabe für den
-                      // Detailbereich (kein Seitenwechsel).
-                      onTap: () =>
-                          context.read<AppState>().waehleAufgabe(aufgabe.uid),
-                    );
-                  },
-                ),
-        ),
-      ],
     );
   }
 }

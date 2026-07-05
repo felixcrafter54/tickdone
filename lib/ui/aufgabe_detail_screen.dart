@@ -35,7 +35,6 @@ class AufgabeDetailScreen extends StatefulWidget {
 class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
   late final TextEditingController _titelController;
   late final TextEditingController _notizController;
-  final TextEditingController _schrittController = TextEditingController();
   final FocusNode _titelFokus = FocusNode();
   final FocusNode _notizFokus = FocusNode();
 
@@ -80,7 +79,6 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     _notizFokus.dispose();
     _titelController.dispose();
     _notizController.dispose();
-    _schrittController.dispose();
     super.dispose();
   }
 
@@ -92,16 +90,6 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     } else {
       Navigator.of(context).pop();
     }
-  }
-
-  /// Neuen Schritt aus der Eingabezeile anlegen (Design-Doc, Abschnitt 4).
-  Future<void> _schrittAnlegen() async {
-    final titel = _schrittController.text.trim();
-    if (titel.isEmpty) return;
-    _schrittController.clear();
-    await context
-        .read<AppState>()
-        .erstelleAufgabe(titel, parentUid: widget.uid);
   }
 
   Future<void> _faelligWaehlen(Aufgabe aufgabe) async {
@@ -159,31 +147,36 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
             ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
+      // Titel oben und Fußzeile unten bleiben stehen; nur die Mitte
+      // (Schritte, Mein Tag, Termin, Notiz) scrollt.
+      body: Column(
         children: [
-          // Karte 1: Titel + Schritte + "Nächster Schritt"
-          _Karte(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+            child: _titelZeile(aufgabe),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
               children: [
-                _titelZeile(aufgabe),
-                for (final schritt in schritte) _schrittZeile(schritt),
-                _schrittHinzufuegenZeile(),
+                for (final schritt in schritte)
+                  _SchrittZeile(key: ValueKey(schritt.uid), schritt: schritt),
+                _NaechsterSchritt(parentUid: widget.uid),
+                const SizedBox(height: 12),
+                _Karte(child: _meinTagZeile(aufgabe)),
+                const SizedBox(height: 8),
+                _Karte(child: _faelligZeile(aufgabe)),
+                const SizedBox(height: 8),
+                _Karte(child: _notizFeld()),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          // "Mein Tag"
-          _Karte(child: _meinTagZeile(aufgabe)),
-          const SizedBox(height: 8),
-          // Fälligkeit
-          _Karte(child: _faelligZeile(aufgabe)),
-          const SizedBox(height: 8),
-          // Notiz
-          _Karte(child: _notizFeld()),
-          const SizedBox(height: 16),
-          _fusszeile(aufgabe),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+            child: _fusszeile(aufgabe),
+          ),
         ],
       ),
     );
@@ -242,95 +235,6 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
               context.read<AppState>().setzeWichtig(widget.uid, !aufgabe.wichtig),
         ),
       ],
-    );
-  }
-
-  Widget _schrittZeile(Aufgabe schritt) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              schritt.erledigt
-                  ? Icons.check_circle
-                  : Icons.radio_button_unchecked,
-              color: schritt.erledigt
-                  ? TickdoneFarben.erledigt
-                  : TickdoneFarben.textGedimmt,
-              size: 20,
-            ),
-            tooltip: schritt.erledigt ? 'Wieder öffnen' : 'Erledigt',
-            onPressed: () => context
-                .read<AppState>()
-                .setzeErledigt(schritt.uid, !schritt.erledigt),
-          ),
-          Expanded(
-            child: Text(
-              schritt.titel,
-              style: schritt.erledigt
-                  ? const TextStyle(
-                      decoration: TextDecoration.lineThrough,
-                      color: TickdoneFarben.textSchwach,
-                    )
-                  : const TextStyle(color: TickdoneFarben.text),
-            ),
-          ),
-          PopupMenuButton<void Function()>(
-            icon: const Icon(Icons.more_vert,
-                size: 18, color: TickdoneFarben.textGedimmt),
-            tooltip: 'Schritt-Aktionen',
-            onSelected: (aktion) => aktion(),
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: () => context
-                    .read<AppState>()
-                    .setzeErledigt(schritt.uid, !schritt.erledigt),
-                child: Text(schritt.erledigt
-                    ? 'Als offen markieren'
-                    : 'Als erledigt markieren'),
-              ),
-              PopupMenuItem(
-                value: () =>
-                    context.read<AppState>().stufeSchrittHoch(schritt.uid),
-                child: const Text('Zur Aufgabe höherstufen'),
-              ),
-              PopupMenuItem(
-                value: () =>
-                    AufgabenScreen.loeschenBestaetigen(context, schritt),
-                child: const Text('Schritt löschen',
-                    style: TextStyle(color: TickdoneFarben.ueberfaellig)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _schrittHinzufuegenZeile() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8, top: 2),
-      child: Row(
-        children: [
-          const Icon(Icons.add, size: 20, color: TickdoneFarben.akzent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _schrittController,
-              style: const TextStyle(color: TickdoneFarben.akzent),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                filled: false,
-                isCollapsed: true,
-                hintText: 'Nächster Schritt',
-                hintStyle: TextStyle(color: TickdoneFarben.akzent),
-              ),
-              onSubmitted: (_) => _schrittAnlegen(),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -441,6 +345,195 @@ class _Karte extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: child,
+    );
+  }
+}
+
+/// Ein editierbarer Schritt (Subtask): reinklicken und tippen wie beim
+/// Haupttitel; speichert beim Verlassen des Feldes bzw. mit Enter.
+class _SchrittZeile extends StatefulWidget {
+  const _SchrittZeile({super.key, required this.schritt});
+
+  final Aufgabe schritt;
+
+  @override
+  State<_SchrittZeile> createState() => _SchrittZeileState();
+}
+
+class _SchrittZeileState extends State<_SchrittZeile> {
+  late final TextEditingController _controller;
+  final FocusNode _fokus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.schritt.titel);
+    _fokus.addListener(() {
+      if (!_fokus.hasFocus) {
+        context.read<AppState>().setzeTitel(widget.schritt.uid, _controller.text);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_SchrittZeile alt) {
+    super.didUpdateWidget(alt);
+    // Externe Änderung übernehmen, solange nicht gerade editiert wird.
+    if (!_fokus.hasFocus && widget.schritt.titel != _controller.text) {
+      _controller.text = widget.schritt.titel;
+    }
+  }
+
+  @override
+  void dispose() {
+    _fokus.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final schritt = widget.schritt;
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(
+            schritt.erledigt
+                ? Icons.check_circle
+                : Icons.radio_button_unchecked,
+            color: schritt.erledigt
+                ? TickdoneFarben.erledigt
+                : TickdoneFarben.textGedimmt,
+            size: 20,
+          ),
+          tooltip: schritt.erledigt ? 'Wieder öffnen' : 'Erledigt',
+          onPressed: () => context
+              .read<AppState>()
+              .setzeErledigt(schritt.uid, !schritt.erledigt),
+        ),
+        Expanded(
+          child: TextField(
+            controller: _controller,
+            focusNode: _fokus,
+            maxLines: null,
+            style: TextStyle(
+              decoration:
+                  schritt.erledigt ? TextDecoration.lineThrough : null,
+              color: schritt.erledigt
+                  ? TickdoneFarben.textSchwach
+                  : TickdoneFarben.text,
+            ),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              filled: false,
+              isCollapsed: true,
+            ),
+            onSubmitted: (wert) =>
+                context.read<AppState>().setzeTitel(schritt.uid, wert),
+          ),
+        ),
+        PopupMenuButton<void Function()>(
+          icon: const Icon(Icons.more_vert,
+              size: 18, color: TickdoneFarben.textGedimmt),
+          tooltip: 'Schritt-Aktionen',
+          onSelected: (aktion) => aktion(),
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: () => context
+                  .read<AppState>()
+                  .setzeErledigt(schritt.uid, !schritt.erledigt),
+              child: Text(schritt.erledigt
+                  ? 'Als offen markieren'
+                  : 'Als erledigt markieren'),
+            ),
+            PopupMenuItem(
+              value: () =>
+                  context.read<AppState>().stufeSchrittHoch(schritt.uid),
+              child: const Text('Zur Aufgabe höherstufen'),
+            ),
+            PopupMenuItem(
+              value: () =>
+                  AufgabenScreen.loeschenBestaetigen(context, schritt),
+              child: const Text('Schritt löschen',
+                  style: TextStyle(color: TickdoneFarben.ueberfaellig)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// "Nächster Schritt"-Eingabe im selben Stil wie ein Schritt: normale
+/// Schrift, kein Rahmen. Das Plus sitzt an der Kreis-Position und wird
+/// beim Reinklicken (Fokus) zum leeren Schrittkreis.
+class _NaechsterSchritt extends StatefulWidget {
+  const _NaechsterSchritt({required this.parentUid});
+
+  final String parentUid;
+
+  @override
+  State<_NaechsterSchritt> createState() => _NaechsterSchrittState();
+}
+
+class _NaechsterSchrittState extends State<_NaechsterSchritt> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _fokus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _fokus.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _fokus.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _anlegen() async {
+    final titel = _controller.text.trim();
+    if (titel.isEmpty) return;
+    _controller.clear();
+    await context
+        .read<AppState>()
+        .erstelleAufgabe(titel, parentUid: widget.parentUid);
+    // Fokus behalten, damit man mehrere Schritte hintereinander tippen kann.
+    _fokus.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final aktiv = _fokus.hasFocus;
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(
+            aktiv ? Icons.radio_button_unchecked : Icons.add,
+            color: TickdoneFarben.textGedimmt,
+            size: 20,
+          ),
+          tooltip: 'Schritt hinzufügen',
+          onPressed: () => _fokus.requestFocus(),
+        ),
+        Expanded(
+          child: TextField(
+            controller: _controller,
+            focusNode: _fokus,
+            maxLines: null,
+            style: const TextStyle(color: TickdoneFarben.text),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              filled: false,
+              isCollapsed: true,
+              hintText: 'Nächster Schritt',
+            ),
+            onSubmitted: (_) => _anlegen(),
+          ),
+        ),
+      ],
     );
   }
 }
