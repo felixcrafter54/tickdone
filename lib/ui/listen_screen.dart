@@ -23,6 +23,13 @@ class ListenScreen extends StatelessWidget {
     );
   }
 
+  void _oeffneSmart(BuildContext context, Smartliste smart) {
+    context.read<AppState>().oeffneSmartliste(smart);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AufgabenScreen()),
+    );
+  }
+
   Future<void> _neueListeDialog(BuildContext context) async {
     final controller = TextEditingController();
     final name = await showDialog<String>(
@@ -98,49 +105,56 @@ class ListenScreen extends StatelessWidget {
                         ),
                       ],
                     )
-                  : ListView.builder(
-                      itemCount: listen.length,
-                      itemBuilder: (context, index) {
-                        final liste = listen[index];
-                        return ListTile(
-                          leading: Icon(
-                            Icons.checklist,
-                            color: _farbeVon(liste) ??
-                                Theme.of(context).colorScheme.primary,
+                  : ListView(
+                      children: [
+                        // Smart-Listen (listenübergreifend) oben.
+                        for (final smart in Smartliste.values)
+                          ListTile(
+                            leading: Icon(smartIcon(smart),
+                                color: TickdoneFarben.akzent),
+                            title: Text(smart.anzeige),
+                            trailing:
+                                ListenZaehler(appState.smartAnzahl(smart)),
+                            onTap: () => _oeffneSmart(context, smart),
                           ),
-                          title: Text(liste.displayName),
-                          subtitle: (liste.description?.isNotEmpty ?? false)
-                              ? Text(liste.description!)
-                              : null,
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ListenZaehler(
-                                  appState.offeneAnzahl(liste.uid)),
-                              // Drei-Punkte-Menü (Handy): Umbenennen /
-                              // Duplizieren / Löschen.
-                              PopupMenuButton<void Function()>(
-                                icon: const Icon(Icons.more_vert),
-                                tooltip: 'Listen-Aktionen',
-                                onSelected: (aktion) => aktion(),
-                                itemBuilder: (menuContext) =>
-                                    ListenAktionen.menueEintraege(
-                                        menuContext, liste),
-                              ),
-                            ],
+                        const Divider(),
+                        for (final liste in listen)
+                          ListTile(
+                            leading: Icon(
+                              Icons.checklist,
+                              color: _farbeVon(liste) ??
+                                  Theme.of(context).colorScheme.primary,
+                            ),
+                            title: Text(liste.displayName),
+                            subtitle:
+                                (liste.description?.isNotEmpty ?? false)
+                                    ? Text(liste.description!)
+                                    : null,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ListenZaehler(
+                                    appState.offeneAnzahl(liste.uid)),
+                                PopupMenuButton<void Function()>(
+                                  icon: const Icon(Icons.more_vert),
+                                  tooltip: 'Listen-Aktionen',
+                                  onSelected: (aktion) => aktion(),
+                                  itemBuilder: (menuContext) =>
+                                      ListenAktionen.menueEintraege(
+                                          menuContext, liste),
+                                ),
+                              ],
+                            ),
+                            onTap: () {
+                              context.read<AppState>().oeffneListe(liste);
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AufgabenScreen(),
+                                ),
+                              );
+                            },
                           ),
-                          onTap: () {
-                            // Laden anstoßen und sofort navigieren –
-                            // der Screen zeigt den Ladefortschritt selbst.
-                            context.read<AppState>().oeffneListe(liste);
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const AufgabenScreen(),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                      ],
                     ),
             ),
           ),
