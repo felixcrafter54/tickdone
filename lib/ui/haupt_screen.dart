@@ -47,6 +47,13 @@ Color? listenFarbe(Calendar liste) {
   return null;
 }
 
+/// Icon je Smart-Liste.
+IconData smartIcon(Smartliste s) => switch (s) {
+      Smartliste.meinTag => Icons.wb_sunny_outlined,
+      Smartliste.wichtig => Icons.star_border,
+      Smartliste.geplant => Icons.event_outlined,
+    };
+
 /// Kleiner gedimmter Zähler offener Aufgaben rechts am Listeneintrag.
 /// Zeigt nichts bei null (noch unbekannt) oder 0.
 class ListenZaehler extends StatelessWidget {
@@ -213,15 +220,16 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
                 const SizedBox(width: 280, child: _ListenSpalte()),
                 const VerticalDivider(width: 1),
                 Expanded(
-                  child: app.aktiveListe == null
+                  child: !app.hatAnsicht
                       ? const Center(
                           child: Text('Wähle links eine Liste.',
                               style: TextStyle(
                                   color: TickdoneFarben.textGedimmt)),
                         )
                       : AufgabenScreen(
-                          // Neuaufbau bei Listenwechsel (frische Auswahl).
-                          key: ValueKey(app.aktiveListe!.uid),
+                          // Neuaufbau bei Ansichtswechsel (frische Auswahl).
+                          key: ValueKey(app.aktiveListe?.uid ??
+                              'smart-${app.aktiveSmartliste?.name}'),
                           eingebettet: true,
                           neueAufgabeFokus: _neueAufgabeFokus,
                           onOeffneDetail: (uid) =>
@@ -314,6 +322,18 @@ class _ListenSpalte extends StatelessWidget {
               ],
             ),
           ),
+          // Smart-Listen (listenübergreifend) oben, wie MS To Do.
+          for (final smart in Smartliste.values)
+            ListTile(
+              dense: true,
+              selected: app.aktiveSmartliste == smart,
+              selectedTileColor: TickdoneFarben.flaecheGewaehlt,
+              leading: Icon(smartIcon(smart), color: TickdoneFarben.akzent),
+              title: Text(smart.anzeige),
+              trailing: ListenZaehler(app.smartAnzahl(smart)),
+              onTap: () => context.read<AppState>().oeffneSmartliste(smart),
+            ),
+          const Divider(height: 1),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Text('LISTEN',

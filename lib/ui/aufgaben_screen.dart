@@ -336,7 +336,7 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
 
   AppBar _normaleAppBar(AppState appState) {
     return AppBar(
-      title: Text(appState.aktiveListe?.displayName ?? 'Aufgaben'),
+      title: Text(appState.ansichtTitel),
       actions: [
         // Filter: alle / offen / erledigt / wichtig
         PopupMenuButton<AufgabenFilter>(
@@ -390,8 +390,10 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
           : _normaleAppBar(appState),
       body: Column(
         children: [
-          // Inline-Zeile "Aufgabe hinzufügen" (Design-Doc, Abschnitt 3).
-          NeueAufgabeZeile(focusNode: widget.neueAufgabeFokus),
+          // Inline-Zeile "Aufgabe hinzufügen" – in Smart-Listen ausgeblendet
+          // (das Anlegen dort wäre nicht eindeutig einer Liste zuzuordnen).
+          if (appState.aktiveSmartliste == null)
+            NeueAufgabeZeile(focusNode: widget.neueAufgabeFokus),
           // Dünne Anzeige oben, während im Hintergrund gesynct wird.
           if (appState.aufgabenLaden || appState.speichertGerade)
             const LinearProgressIndicator(minHeight: 2),

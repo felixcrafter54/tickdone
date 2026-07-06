@@ -31,6 +31,16 @@ enum AufgabenFilter {
   final String anzeige;
 }
 
+/// Listenübergreifende Smart-Listen (wie MS To Do).
+enum Smartliste {
+  meinTag('Mein Tag'),
+  wichtig('Wichtig'),
+  geplant('Geplant');
+
+  const Smartliste(this.anzeige);
+  final String anzeige;
+}
+
 /// Zentraler App-Zustand: Verbindung und geladene Aufgabenlisten.
 ///
 /// Bewusst einfach gehalten: EIN ChangeNotifier, den `provider` der
@@ -130,11 +140,18 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // ---- Offene-Aufgaben-Zähler je Liste (Sidebar) ----
+  // ---- Offene-Aufgaben-Zähler je Liste + Cache für Smart-Listen ----
 
   /// Gecachte Anzahl offener Wurzel-Aufgaben je Listen-UID (für andere als
   /// die aktive Liste). Die aktive Liste wird live aus [aufgaben] gezählt.
   final Map<String, int> _offeneAnzahl = {};
+
+  /// Zuletzt geladene Aufgaben je Liste (für die listenübergreifenden
+  /// Smart-Listen). Wird bei aktualisiereOffeneAnzahlen befüllt.
+  final Map<String, List<Aufgabe>> _cacheProListe = {};
+
+  List<Aufgabe> get _alleAufgaben =>
+      [for (final liste in _cacheProListe.values) ...liste];
 
   /// Anzahl offener (nicht erledigter) Wurzel-Aufgaben einer Liste –
   /// null, solange noch nicht ermittelt.
@@ -145,20 +162,36 @@ class AppState extends ChangeNotifier {
     return _offeneAnzahl[listenUid];
   }
 
-  /// Lädt für alle Listen die Aufgaben und zählt die offenen Wurzel-Aufgaben.
-  /// Läuft parallel und aktualisiert die Sidebar, sobald die Zahlen da sind.
+  bool _passtZuSmart(Aufgabe a, Smartliste s) => switch (s) {
+        Smartliste.meinTag => a.meinTag,
+        Smartliste.wichtig => a.wichtig,
+        Smartliste.geplant => a.faellig != null,
+      };
+
+  /// Anzahl offener Aufgaben in einer Smart-Liste (listenübergreifend).
+  int smartAnzahl(Smartliste s) => _alleAufgaben
+      .where((a) => !a.istSchritt && !a.erledigt && _passtZuSmart(a, s))
+      .length;
+
+  /// Lädt für alle Listen die Aufgaben, füllt den Cache und zählt die
+  /// offenen Wurzel-Aufgaben. Läuft parallel; ist eine Smart-Liste offen,
+  /// wird deren Anzeige danach neu aufgebaut.
   Future<void> aktualisiereOffeneAnzahlen() async {
     if (!istVerbunden) return;
     final listen = List<Calendar>.from(aufgabenlisten);
     await Future.wait(listen.map((liste) async {
       try {
         final aufg = await _caldav.ladeAufgaben(liste);
+        _cacheProListe[liste.uid] = aufg;
         _offeneAnzahl[liste.uid] =
             aufg.where((a) => !a.istSchritt && !a.erledigt).length;
       } catch (_) {
         // Zähler dieser Liste bleibt einfach unbekannt.
       }
     }));
+    if (aktiveSmartliste != null) {
+      aufgaben = List<Aufgabe>.from(_alleAufgaben);
+    }
     notifyListeners();
   }
 
@@ -231,12 +264,36 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // ---- Aufgaben der geöffneten Liste ----
+  // ---- Aufgaben der geöffneten Liste / Smart-Liste ----
 
   Calendar? aktiveListe;
+
+  /// Ist eine Smart-Liste offen, ist [aktiveListe] null und [aufgaben]
+  /// enthält die Aufgaben ALLER Listen (gefiltert wird in wurzelAufgaben).
+  Smartliste? aktiveSmartliste;
+
   List<Aufgabe> aufgaben = [];
   bool aufgabenLaden = false;
   String? aufgabenFehler;
+
+  /// Titel der aktuellen Ansicht (Liste oder Smart-Liste).
+  String get ansichtTitel =>
+      aktiveSmartliste?.anzeige ?? aktiveListe?.displayName ?? 'Aufgaben';
+
+  /// Ob gerade überhaupt eine Ansicht (Liste oder Smart-Liste) offen ist.
+  bool get hatAnsicht => aktiveListe != null || aktiveSmartliste != null;
+
+  /// Smart-Liste öffnen (listenübergreifend). Zeigt sofort den Cache und
+  /// frischt im Hintergrund auf.
+  void oeffneSmartliste(Smartliste s) {
+    aktiveSmartliste = s;
+    aktiveListe = null;
+    aktiveAufgabeUid = null;
+    aufgabenFehler = null;
+    aufgaben = List<Aufgabe>.from(_alleAufgaben);
+    notifyListeners();
+    unawaited(aktualisiereOffeneAnzahlen());
+  }
 
   /// Im Drei-Spalten-Layout (Desktop/Tablet): die gerade im Detailbereich
   /// gezeigte Aufgabe. Auf dem Handy ungenutzt (dort Push-Navigation).
@@ -287,8 +344,11 @@ class AppState extends ChangeNotifier {
   /// Nur die Wurzel-Aufgaben, gefiltert und sortiert – Schritte (Subtasks)
   /// erscheinen erst in der Detailansicht (Spec, Abschnitt 3).
   List<Aufgabe> get wurzelAufgaben {
+    final smart = aktiveSmartliste;
     final gefiltert = aufgaben.where((a) {
       if (a.istSchritt) return false;
+      // In einer Smart-Liste nur passende Aufgaben (listenübergreifend).
+      if (smart != null && !_passtZuSmart(a, smart)) return false;
       return switch (filter) {
         AufgabenFilter.alle => true,
         AufgabenFilter.offen => !a.erledigt,
@@ -358,6 +418,7 @@ class AppState extends ChangeNotifier {
   /// Liste öffnen und ihre Aufgaben laden.
   Future<void> oeffneListe(Calendar liste) async {
     aktiveListe = liste;
+    aktiveSmartliste = null;
     aufgaben = [];
     aufgabenFehler = null;
     // Beim Listenwechsel keine alte Detail-Auswahl behalten.
@@ -365,15 +426,26 @@ class AppState extends ChangeNotifier {
     await aufgabenNeuLaden();
   }
 
-  /// Aufgaben der aktiven Liste (neu) vom Server holen.
+  /// Aufgaben der aktuellen Ansicht (neu) vom Server holen.
   Future<void> aufgabenNeuLaden() async {
+    if (!istVerbunden) return;
+    // Smart-Liste: alle Listen frisch laden und Anzeige neu aufbauen.
+    if (aktiveSmartliste != null) {
+      aufgabenLaden = true;
+      notifyListeners();
+      await aktualisiereOffeneAnzahlen();
+      aufgabenLaden = false;
+      notifyListeners();
+      return;
+    }
     final liste = aktiveListe;
-    if (liste == null || !istVerbunden) return;
+    if (liste == null) return;
     aufgabenLaden = true;
     aufgabenFehler = null;
     notifyListeners();
     try {
       aufgaben = await _caldav.ladeAufgaben(liste);
+      _cacheProListe[liste.uid] = aufgaben;
     } catch (fehler) {
       aufgabenFehler = _lesbareMeldung(fehler);
     } finally {
@@ -649,8 +721,11 @@ class AppState extends ChangeNotifier {
     gespeicherterZugang = null;
     aufgabenlisten = [];
     aktiveListe = null;
+    aktiveSmartliste = null;
     aktiveAufgabeUid = null;
     aufgaben = [];
+    _cacheProListe.clear();
+    _offeneAnzahl.clear();
     aufgabenFehler = null;
     fehlermeldung = null;
     notifyListeners();

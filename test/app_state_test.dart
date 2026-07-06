@@ -10,6 +10,7 @@ Aufgabe aufgabe(
   bool erledigt = false,
   int? sortOrder,
   bool favorit = false,
+  bool meinTag = false,
   DateTime? faellig,
   int prioritaet = 0,
   DateTime? erstellt,
@@ -21,6 +22,7 @@ Aufgabe aufgabe(
       parentUid: parentUid,
       sortOrder: sortOrder,
       favorit: favorit,
+      meinTag: meinTag,
       faellig: faellig,
       prioritaet: prioritaet,
       erstellt: erstellt,
@@ -28,6 +30,43 @@ Aufgabe aufgabe(
     );
 
 void main() {
+  group('Smart-Listen-Filter', () {
+    late AppState state;
+
+    setUp(() {
+      state = AppState();
+      state.aufgaben = [
+        aufgabe('mein-tag', meinTag: true),
+        aufgabe('wichtig', favorit: true),
+        aufgabe('geplant', faellig: DateTime(2026, 8, 1)),
+        aufgabe('nichts'),
+        // Schritte tauchen in Smart-Listen nicht als Wurzel auf.
+        aufgabe('schritt', parentUid: 'mein-tag', meinTag: true),
+      ];
+    });
+
+    test('Mein Tag zeigt nur markierte Wurzel-Aufgaben', () {
+      state.aktiveSmartliste = Smartliste.meinTag;
+      expect(state.wurzelAufgaben.map((a) => a.uid), ['mein-tag']);
+    });
+
+    test('Wichtig zeigt nur wichtige', () {
+      state.aktiveSmartliste = Smartliste.wichtig;
+      expect(state.wurzelAufgaben.map((a) => a.uid), ['wichtig']);
+    });
+
+    test('Geplant zeigt nur mit Fälligkeit', () {
+      state.aktiveSmartliste = Smartliste.geplant;
+      expect(state.wurzelAufgaben.map((a) => a.uid), ['geplant']);
+    });
+
+    test('ohne Smart-Liste alle Wurzel-Aufgaben', () {
+      state.aktiveSmartliste = null;
+      expect(state.wurzelAufgaben.map((a) => a.uid).toSet(),
+          {'mein-tag', 'wichtig', 'geplant', 'nichts'});
+    });
+  });
+
   group('AppState-Aufgabenhelfer', () {
     late AppState state;
 
