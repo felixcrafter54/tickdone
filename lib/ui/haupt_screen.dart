@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgabe_detail_screen.dart';
 import 'aufgaben_screen.dart';
+import 'listen_aktionen.dart';
 import 'listen_screen.dart';
 import 'login_screen.dart';
 
@@ -261,32 +262,6 @@ class _ListenSpalte extends StatelessWidget {
     await context.read<AppState>().erstelleListe(name);
   }
 
-  Future<void> _loeschen(BuildContext context, Calendar liste) async {
-    final bestaetigt = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Liste "${liste.displayName}" löschen?'),
-        content: const Text(
-            'Alle Aufgaben dieser Liste werden endgültig gelöscht.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: TickdoneFarben.ueberfaellig),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Löschen'),
-          ),
-        ],
-      ),
-    );
-    if (bestaetigt == true && context.mounted) {
-      await context.read<AppState>().loescheListe(liste);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -330,7 +305,9 @@ class _ListenSpalte extends StatelessWidget {
               children: [
                 for (final liste in app.aufgabenlisten)
                   GestureDetector(
-                    onSecondaryTap: () => _loeschen(context, liste),
+                    // PC: Rechtsklick öffnet das Listen-Menü am Klickpunkt.
+                    onSecondaryTapDown: (d) => ListenAktionen.menue(
+                        context, liste, d.globalPosition),
                     child: ListTile(
                       dense: true,
                       selected: app.aktiveListe?.uid == liste.uid,

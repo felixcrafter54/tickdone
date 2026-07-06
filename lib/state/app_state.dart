@@ -194,6 +194,43 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Liste umbenennen.
+  Future<bool> benenneListeUm(Calendar liste, String neuerName) async {
+    final bereinigt = neuerName.trim();
+    if (bereinigt.isEmpty || bereinigt == liste.displayName) return false;
+    try {
+      await _caldav.benenneListeUm(liste, bereinigt);
+      await listenNeuLaden();
+      return true;
+    } catch (fehler) {
+      fehlermeldung =
+          'Umbenennen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Liste duplizieren (mit allen Aufgaben).
+  Future<bool> dupliziereListe(Calendar liste, String neuerName) async {
+    final bereinigt = neuerName.trim();
+    if (bereinigt.isEmpty) return false;
+    laedt = true;
+    notifyListeners();
+    try {
+      await _caldav.dupliziereListe(liste, bereinigt);
+      await listenNeuLaden();
+      unawaited(aktualisiereOffeneAnzahlen());
+      return true;
+    } catch (fehler) {
+      fehlermeldung =
+          'Duplizieren fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+      return false;
+    } finally {
+      laedt = false;
+      notifyListeners();
+    }
+  }
+
   // ---- Aufgaben der geöffneten Liste ----
 
   Calendar? aktiveListe;

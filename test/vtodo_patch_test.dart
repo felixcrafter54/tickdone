@@ -167,6 +167,35 @@ void main() {
     });
   });
 
+  group('kopiereVTodo', () {
+    test('setzt neue UID, hängt Eltern um, erhält andere Properties', () {
+      final ergebnis = kopiereVTodo(
+        beispielIcal,
+        neueUid: 'kopie-uid',
+        neuerParent: 'neuer-eltern',
+      );
+      expect(ergebnis, contains('UID:kopie-uid'));
+      expect(ergebnis, isNot(contains('UID:patch-test-uid')));
+      expect(ergebnis, contains('RELATED-TO;RELTYPE=PARENT:neuer-eltern'));
+      expect(ergebnis, isNot(contains('eltern-uid')));
+      // Unbekannte Properties / Marker bleiben erhalten.
+      expect(ergebnis, contains('X-APPLE-SORT-ORDER:3072.0'));
+      expect(ergebnis, contains('X-FREMDES-FELD:unbekannt aber wichtig'));
+      expect(ergebnis, contains('FAVORITE'));
+
+      final aufgabe = Aufgabe.ausICalendar(ergebnis)!;
+      expect(aufgabe.uid, 'kopie-uid');
+      expect(aufgabe.parentUid, 'neuer-eltern');
+      expect(aufgabe.sequence, 0);
+    });
+
+    test('ohne neuerParent wird die Aufgabe zur Wurzel', () {
+      final ergebnis = kopiereVTodo(beispielIcal, neueUid: 'kopie-2');
+      expect(ergebnis, isNot(contains('RELTYPE=PARENT')));
+      expect(Aufgabe.ausICalendar(ergebnis)!.parentUid, isNull);
+    });
+  });
+
   group('neuesVTodoIcal', () {
     test('enthält Pflichtfelder und lässt sich parsen', () {
       final ical = neuesVTodoIcal(
