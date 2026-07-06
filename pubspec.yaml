@@ -38,6 +38,7 @@ dependencies:
   provider: ^6.1.5+1
   dio: ^5.10.0
   enough_icalendar: ^0.17.0
+  flutter_secure_storage: ^10.3.1
 
 dev_dependencies:
   flutter_test:

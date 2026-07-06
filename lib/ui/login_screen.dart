@@ -23,6 +23,18 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _passwortSichtbar = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Server/Benutzer vorbefüllen, wenn eine frühere Auto-Anmeldung
+    // scheiterte (z.B. Passwort geändert) – Passwort bleibt leer.
+    final zugang = context.read<AppState>().gespeicherterZugang;
+    if (zugang != null) {
+      _serverController.text = zugang.server;
+      _benutzerController.text = zugang.benutzer;
+    }
+  }
+
+  @override
   void dispose() {
     _serverController.dispose();
     _benutzerController.dispose();
