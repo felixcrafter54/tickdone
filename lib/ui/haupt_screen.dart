@@ -187,18 +187,20 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
                               context.read<AppState>().waehleAufgabe(uid),
                         ),
                 ),
-                const VerticalDivider(width: 1),
-                SizedBox(
-                  width: 380,
-                  child: aktiveUid != null &&
-                          app.aufgabeMitUid(aktiveUid) != null
-                      ? AufgabeDetailScreen(
-                          key: ValueKey(aktiveUid),
-                          uid: aktiveUid,
-                          eingebettet: true,
-                        )
-                      : const _LeererDetail(),
-                ),
+                // Detailspalte nur zeigen, wenn eine Aufgabe gewählt ist –
+                // sonst füllt die mittlere Spalte den Platz (X schließt).
+                if (aktiveUid != null &&
+                    app.aufgabeMitUid(aktiveUid) != null) ...[
+                  const VerticalDivider(width: 1),
+                  SizedBox(
+                    width: 380,
+                    child: AufgabeDetailScreen(
+                      key: ValueKey(aktiveUid),
+                      uid: aktiveUid,
+                      eingebettet: true,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -333,23 +335,6 @@ class _ListenSpalte extends StatelessWidget {
           ),
           const SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-}
-
-/// Rechte Spalte ohne Auswahl (Design-Doc: keine leere Detailseite
-/// aufdrängen, aber im Drei-Spalten-Layout einen ruhigen Platzhalter).
-class _LeererDetail extends StatelessWidget {
-  const _LeererDetail();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: TickdoneFarben.detailFlaeche,
-      child: const Center(
-        child: Text('Keine Aufgabe ausgewählt',
-            style: TextStyle(color: TickdoneFarben.textGedimmt)),
       ),
     );
   }

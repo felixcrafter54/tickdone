@@ -449,6 +449,8 @@ class _NeueAufgabeZeileState extends State<NeueAufgabeZeile> {
       child: TextField(
         controller: _controller,
         focusNode: widget.focusNode,
+        maxLines: 1,
+        textInputAction: TextInputAction.done,
         decoration: const InputDecoration(
           hintText: 'Aufgabe hinzufügen und Enter drücken …',
           prefixIcon: Icon(Icons.add, color: TickdoneFarben.akzent),

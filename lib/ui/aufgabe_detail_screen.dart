@@ -207,7 +207,8 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
           child: TextField(
             controller: _titelController,
             focusNode: _titelFokus,
-            maxLines: null,
+            maxLines: 1,
+            textInputAction: TextInputAction.done,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -401,7 +402,8 @@ class _SchrittZeileState extends State<_SchrittZeile> {
           child: TextField(
             controller: _controller,
             focusNode: _fokus,
-            maxLines: null,
+            maxLines: 1,
+            textInputAction: TextInputAction.done,
             style: TextStyle(
               decoration:
                   schritt.erledigt ? TextDecoration.lineThrough : null,
@@ -504,7 +506,8 @@ class _NaechsterSchrittState extends State<_NaechsterSchritt> {
           child: TextField(
             controller: _controller,
             focusNode: _fokus,
-            maxLines: null,
+            maxLines: 1,
+            textInputAction: TextInputAction.done,
             style: const TextStyle(color: TickdoneFarben.text),
             decoration: randloseDeko('Nächster Schritt'),
             onSubmitted: (_) => _anlegen(),
