@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import 'app_theme.dart';
+import 'aufgaben_screen.dart' show istDesktop;
 
 /// Aktionen zur Listenverwaltung (Umbenennen, Duplizieren, Löschen) –
 /// von PC (Rechtsklick-Menü) und Handy (Drei-Punkte-Menü) genutzt.
@@ -68,7 +69,8 @@ abstract final class ListenAktionen {
     return [
       PopupMenuItem(
         value: () => umbenennen(context, liste),
-        child: const _Zeile(Icons.edit_outlined, 'Liste umbenennen'),
+        child: const _Zeile(Icons.edit_outlined, 'Liste umbenennen',
+            kuerzel: 'F2'),
       ),
       PopupMenuItem(
         value: () => duplizieren(context, liste),
@@ -77,7 +79,7 @@ abstract final class ListenAktionen {
       PopupMenuItem(
         value: () => loeschen(context, liste),
         child: const _Zeile(Icons.delete_outline, 'Liste löschen',
-            rot: true),
+            kuerzel: 'Entf', rot: true),
       ),
     ];
   }
@@ -140,10 +142,11 @@ abstract final class ListenAktionen {
 }
 
 class _Zeile extends StatelessWidget {
-  const _Zeile(this.icon, this.text, {this.rot = false});
+  const _Zeile(this.icon, this.text, {this.kuerzel, this.rot = false});
 
   final IconData icon;
   final String text;
+  final String? kuerzel;
   final bool rot;
 
   @override
@@ -153,7 +156,12 @@ class _Zeile extends StatelessWidget {
       children: [
         Icon(icon, size: 18, color: farbe),
         const SizedBox(width: 12),
-        Text(text, style: TextStyle(color: farbe)),
+        Expanded(child: Text(text, style: TextStyle(color: farbe))),
+        // Tastenkürzel nur auf dem Desktop anzeigen.
+        if (kuerzel != null && istDesktop)
+          Text(kuerzel!,
+              style: const TextStyle(
+                  color: TickdoneFarben.textGedimmt, fontSize: 12)),
       ],
     );
   }

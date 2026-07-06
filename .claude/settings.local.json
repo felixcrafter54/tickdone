@@ -30,7 +30,8 @@
       "PowerShell(git checkout -b feature/listenverwaltung)",
       "PowerShell(flutter analyze 2>&1)",
       "PowerShell(git commit -F \"C:\\\\Users\\\\noste\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Python-tickdone\\\\5d9789a3-b596-4f77-a417-9a7bb8e8142c\\\\scratchpad\\\\commit_listen.txt\")",
-      "PowerShell(git push -u origin feature/listenverwaltung)"
+      "PowerShell(git push -u origin feature/listenverwaltung)",
+      "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" pr create --repo felixcrafter54/tickdone --base main --head feature/listenverwaltung --title \"Listenverwaltung: Umbenennen, Duplizieren, Loeschen \\(Phase 2\\)\" --body-file \"C:\\\\Users\\\\noste\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Python-tickdone\\\\5d9789a3-b596-4f77-a417-9a7bb8e8142c\\\\scratchpad\\\\commit_listen.txt\")"
     ]
   }
 }

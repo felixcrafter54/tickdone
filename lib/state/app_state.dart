@@ -249,6 +249,21 @@ class AppState extends ChangeNotifier {
 
   void setzeHover(String? uid) => hoverAufgabeUid = uid;
 
+  /// Liste, über der der Mauszeiger schwebt (Sidebar). Für die
+  /// Listen-Tastenkürzel (F2 umbenennen, Entf löschen). Ohne notify.
+  String? hoverListeUid;
+
+  void setzeListenHover(String? uid) => hoverListeUid = uid;
+
+  /// Liste per UID – null, wenn nicht (mehr) vorhanden.
+  Calendar? listeMitUid(String? uid) {
+    if (uid == null) return null;
+    for (final l in aufgabenlisten) {
+      if (l.uid == uid) return l;
+    }
+    return null;
+  }
+
   /// Aufgabe für den Detailbereich wählen (null schließt ihn).
   void waehleAufgabe(String? uid) {
     if (aktiveAufgabeUid == uid) return;
