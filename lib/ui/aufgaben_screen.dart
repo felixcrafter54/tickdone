@@ -1,3 +1,4 @@
+import 'package:caldav/caldav.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -216,6 +217,40 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
     });
   }
 
+  /// Ausgewählte Aufgaben in eine andere Liste verschieben.
+  Future<void> _auswahlVerschieben() async {
+    final appState = context.read<AppState>();
+    final andereListen = appState.aufgabenlisten
+        .where((l) => l.uid != appState.aktiveListe?.uid)
+        .toList();
+    if (andereListen.isEmpty) return;
+    final ziel = await showModalBottomSheet<Calendar>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text('Verschieben in …',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            for (final liste in andereListen)
+              ListTile(
+                leading: const Icon(Icons.checklist),
+                title: Text(liste.displayName),
+                onTap: () => Navigator.of(sheetContext).pop(liste),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (ziel == null || !mounted) return;
+    for (final uid in _auswahl.toList()) {
+      await appState.verschiebeAufgabe(uid, ziel);
+    }
+    _auswahlBeenden();
+  }
+
   Future<void> _auswahlLoeschen() async {
     final anzahl = _auswahl.length;
     final bestaetigt = await showDialog<bool>(
@@ -278,6 +313,15 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
               value: _auswahlWichtig,
               child: const Text('Als wichtig markieren'),
             ),
+            if (context
+                .read<AppState>()
+                .aufgabenlisten
+                .where((l) => l.uid != context.read<AppState>().aktiveListe?.uid)
+                .isNotEmpty)
+              PopupMenuItem(
+                value: _auswahlVerschieben,
+                child: const Text('Verschieben in …'),
+              ),
             PopupMenuItem(
               value: _auswahlLoeschen,
               child: Text('Löschen',
