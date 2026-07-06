@@ -37,6 +37,11 @@ jobs:
   android:
     name: Android-APK
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,7 +58,20 @@ jobs:
       - name: Abhängigkeiten holen
         run: flutter pub get
 
-      - name: APK bauen (Release, Debug-Signatur)
+      # Festen Release-Keystore aus den Secrets herstellen. Fehlen die
+      # Secrets (z.B. Fork), wird ohne key.properties gebaut -> Debug-Signatur.
+      - name: Release-Keystore einrichten
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=release-keystore.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: APK bauen (Release)
         run: flutter build apk --release
 
       - name: APK als Artefakt hochladen
