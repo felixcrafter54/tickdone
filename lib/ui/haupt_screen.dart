@@ -46,6 +46,24 @@ Color? listenFarbe(Calendar liste) {
   return null;
 }
 
+/// Kleiner gedimmter Zähler offener Aufgaben rechts am Listeneintrag.
+/// Zeigt nichts bei null (noch unbekannt) oder 0.
+class ListenZaehler extends StatelessWidget {
+  const ListenZaehler(this.anzahl, {super.key});
+
+  final int? anzahl;
+
+  @override
+  Widget build(BuildContext context) {
+    if (anzahl == null || anzahl == 0) return const SizedBox.shrink();
+    return Text(
+      '$anzahl',
+      style: const TextStyle(
+          color: TickdoneFarben.textGedimmt, fontSize: 13),
+    );
+  }
+}
+
 // ---- Tastatur-Intents (Design-Doc, Abschnitt 7) ----
 class _ErledigtIntent extends Intent {
   const _ErledigtIntent();
@@ -321,6 +339,8 @@ class _ListenSpalte extends StatelessWidget {
                           color: listenFarbe(liste) ?? TickdoneFarben.akzent),
                       title: Text(liste.displayName,
                           maxLines: 1, overflow: TextOverflow.ellipsis),
+                      // Anzahl offener Aufgaben (leer, solange 0/unbekannt).
+                      trailing: ListenZaehler(app.offeneAnzahl(liste.uid)),
                       onTap: () => context.read<AppState>().oeffneListe(liste),
                     ),
                   ),

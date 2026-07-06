@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgaben_screen.dart';
+import 'haupt_screen.dart';
 import 'login_screen.dart';
 
 /// Übersicht der Aufgabenlisten (Collections mit VTODO) nach der Anmeldung.
@@ -138,6 +139,8 @@ class ListenScreen extends StatelessWidget {
                           subtitle: (liste.description?.isNotEmpty ?? false)
                               ? Text(liste.description!)
                               : null,
+                          trailing:
+                              ListenZaehler(appState.offeneAnzahl(liste.uid)),
                           onTap: () {
                             // Laden anstoßen und sofort navigieren –
                             // der Screen zeigt den Ladefortschritt selbst.

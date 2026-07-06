@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:caldav/caldav.dart';
 import 'package:flutter/foundation.dart';
 
@@ -99,6 +101,8 @@ class AppState extends ChangeNotifier {
       if (aufgabenlisten.isNotEmpty) {
         await oeffneListe(aufgabenlisten.first);
       }
+      // Offene-Zähler für die Sidebar im Hintergrund nachladen.
+      unawaited(aktualisiereOffeneAnzahlen());
       return true;
     } catch (fehler) {
       fehlermeldung = _lesbareMeldung(fehler);
@@ -117,12 +121,45 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       aufgabenlisten = await _caldav.ladeAufgabenlisten();
+      unawaited(aktualisiereOffeneAnzahlen());
     } catch (fehler) {
       fehlermeldung = _lesbareMeldung(fehler);
     } finally {
       laedt = false;
       notifyListeners();
     }
+  }
+
+  // ---- Offene-Aufgaben-Zähler je Liste (Sidebar) ----
+
+  /// Gecachte Anzahl offener Wurzel-Aufgaben je Listen-UID (für andere als
+  /// die aktive Liste). Die aktive Liste wird live aus [aufgaben] gezählt.
+  final Map<String, int> _offeneAnzahl = {};
+
+  /// Anzahl offener (nicht erledigter) Wurzel-Aufgaben einer Liste –
+  /// null, solange noch nicht ermittelt.
+  int? offeneAnzahl(String listenUid) {
+    if (listenUid == aktiveListe?.uid) {
+      return aufgaben.where((a) => !a.istSchritt && !a.erledigt).length;
+    }
+    return _offeneAnzahl[listenUid];
+  }
+
+  /// Lädt für alle Listen die Aufgaben und zählt die offenen Wurzel-Aufgaben.
+  /// Läuft parallel und aktualisiert die Sidebar, sobald die Zahlen da sind.
+  Future<void> aktualisiereOffeneAnzahlen() async {
+    if (!istVerbunden) return;
+    final listen = List<Calendar>.from(aufgabenlisten);
+    await Future.wait(listen.map((liste) async {
+      try {
+        final aufg = await _caldav.ladeAufgaben(liste);
+        _offeneAnzahl[liste.uid] =
+            aufg.where((a) => !a.istSchritt && !a.erledigt).length;
+      } catch (_) {
+        // Zähler dieser Liste bleibt einfach unbekannt.
+      }
+    }));
+    notifyListeners();
   }
 
   /// Neue Aufgabenliste anlegen und die Übersicht aktualisieren.
@@ -473,6 +510,8 @@ class AppState extends ChangeNotifier {
         await _caldav.verschiebeAufgabe(einzelne, ziel);
       }
       await aufgabenNeuLaden();
+      // Ziel-Liste hat jetzt mehr, Quell-Liste weniger – Zähler auffrischen.
+      unawaited(aktualisiereOffeneAnzahlen());
       return true;
     } catch (fehler) {
       aufgabenFehler =
