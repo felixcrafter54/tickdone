@@ -416,8 +416,10 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                           child: Text(
                             appState.aufgabenLaden
                                 ? 'Lade Aufgaben …'
-                                : 'Keine Aufgaben hier. '
-                                    'Füge oben eine hinzu.',
+                                : appState.aktiveSmartliste != null
+                                    ? 'Keine Aufgaben hier.'
+                                    : 'Keine Aufgaben hier. '
+                                        'Füge oben eine hinzu.',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                                 color: TickdoneFarben.textGedimmt),
