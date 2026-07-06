@@ -141,6 +141,31 @@ class CalDavService {
     await client.deleteCalendar(liste);
   }
 
+  /// Liste umbenennen (Anzeigename der Collection ändern).
+  Future<void> benenneListeUm(Calendar liste, String neuerName) async {
+    await client.updateCalendar(liste, displayName: neuerName);
+  }
+
+  /// Liste duplizieren: neue VTODO-Collection anlegen und alle Aufgaben
+  /// hineinkopieren. UIDs werden neu vergeben, Eltern-Bezüge (RELATED-TO)
+  /// entsprechend umgehängt, damit die Subtask-Hierarchie erhalten bleibt.
+  Future<void> dupliziereListe(Calendar quelle, String neuerName) async {
+    final neu = await client.createCalendar(neuerName,
+        supportedComponents: const ['VTODO']);
+    final aufgaben = await ladeAufgaben(quelle);
+    final uidMap = {for (final a in aufgaben) a.uid: neueUid()};
+    for (final a in aufgaben) {
+      final neueUidWert = uidMap[a.uid]!;
+      final neuerParent =
+          a.parentUid != null ? uidMap[a.parentUid] : null;
+      final ical = kopiereVTodo(a.rohIcal,
+          neueUid: neueUidWert, neuerParent: neuerParent);
+      final href = neu.href.resolve('$neueUidWert.ics');
+      await client.webdavClient
+          .put(href.toString(), body: ical, ifNoneMatch: '*');
+    }
+  }
+
   /// Aufgabe in eine andere Liste verschieben: unverändertes iCalendar
   /// in die Ziel-Collection legen (If-None-Match: *), dann das Original
   /// löschen. Erst nach erfolgreichem Anlegen wird gelöscht –

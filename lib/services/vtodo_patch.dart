@@ -117,6 +117,49 @@ IcalPatch hochstufenPatch() => (ical) => patcheVTodo(ical, (vtodo) {
       });
     });
 
+/// Kopiert ein VTODO mit NEUER UID und (optional) umgehängtem Eltern-Bezug –
+/// fürs Duplizieren einer Liste. SEQUENCE wird auf 0 gesetzt, LAST-MODIFIED
+/// aktualisiert; alle übrigen Properties bleiben erhalten.
+String kopiereVTodo(
+  String ical, {
+  required String neueUid,
+  String? neuerParent,
+  DateTime? jetzt,
+}) {
+  final komponente = VComponent.parse(ical);
+  final VComponent wurzel;
+  final VTodo vtodo;
+  if (komponente is VCalendar) {
+    wurzel = komponente;
+    vtodo = komponente.children.whereType<VTodo>().first;
+  } else if (komponente is VTodo) {
+    wurzel = komponente;
+    vtodo = komponente;
+  } else {
+    throw ArgumentError('Text enthält kein VTODO');
+  }
+
+  // UID ersetzen.
+  vtodo.properties.removeWhere((p) => p.name == 'UID');
+  vtodo.properties.add(TextProperty('UID:$neueUid'));
+
+  // Eltern-Bezug (RELATED-TO PARENT / ohne RELTYPE) neu setzen.
+  vtodo.properties.removeWhere((p) {
+    if (p.name != 'RELATED-TO') return false;
+    final reltype = p.parameters['RELTYPE'];
+    return reltype == null ||
+        (reltype is RelationshipParameter &&
+            reltype.relationship == Relationship.parent);
+  });
+  if (neuerParent != null) {
+    vtodo.properties.add(TextProperty('RELATED-TO;RELTYPE=PARENT:$neuerParent'));
+  }
+
+  vtodo.sequence = 0;
+  vtodo.lastModified = (jetzt ?? DateTime.now()).toUtc();
+  return wurzel.toString();
+}
+
 /// Erzeugt eine neue eindeutige UID für eine Aufgabe.
 String neueUid() {
   final zufall = Random().nextInt(0xFFFFFF).toRadixString(16);

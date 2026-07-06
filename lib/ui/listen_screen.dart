@@ -6,6 +6,7 @@ import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgaben_screen.dart';
 import 'haupt_screen.dart';
+import 'listen_aktionen.dart';
 import 'login_screen.dart';
 
 /// Übersicht der Aufgabenlisten (Collections mit VTODO) nach der Anmeldung.
@@ -49,34 +50,6 @@ class ListenScreen extends StatelessWidget {
     controller.dispose();
     if (name == null || name.trim().isEmpty || !context.mounted) return;
     await context.read<AppState>().erstelleListe(name);
-  }
-
-  Future<void> _loeschenBestaetigen(
-      BuildContext context, Calendar liste) async {
-    final bestaetigt = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Liste "${liste.displayName}" löschen?'),
-        content: const Text(
-            'Alle Aufgaben dieser Liste werden endgültig gelöscht.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialogContext).colorScheme.error,
-            ),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Löschen'),
-          ),
-        ],
-      ),
-    );
-    if (bestaetigt == true && context.mounted) {
-      await context.read<AppState>().loescheListe(liste);
-    }
   }
 
   @override
@@ -139,8 +112,23 @@ class ListenScreen extends StatelessWidget {
                           subtitle: (liste.description?.isNotEmpty ?? false)
                               ? Text(liste.description!)
                               : null,
-                          trailing:
-                              ListenZaehler(appState.offeneAnzahl(liste.uid)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListenZaehler(
+                                  appState.offeneAnzahl(liste.uid)),
+                              // Drei-Punkte-Menü (Handy): Umbenennen /
+                              // Duplizieren / Löschen.
+                              PopupMenuButton<void Function()>(
+                                icon: const Icon(Icons.more_vert),
+                                tooltip: 'Listen-Aktionen',
+                                onSelected: (aktion) => aktion(),
+                                itemBuilder: (menuContext) =>
+                                    ListenAktionen.menueEintraege(
+                                        menuContext, liste),
+                              ),
+                            ],
+                          ),
                           onTap: () {
                             // Laden anstoßen und sofort navigieren –
                             // der Screen zeigt den Ladefortschritt selbst.
@@ -151,9 +139,6 @@ class ListenScreen extends StatelessWidget {
                               ),
                             );
                           },
-                          // Kontextaktion (Spec: langes Tippen auf Mobile).
-                          onLongPress: () =>
-                              _loeschenBestaetigen(context, liste),
                         );
                       },
                     ),

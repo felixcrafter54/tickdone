@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgabe_detail_screen.dart';
 import 'aufgaben_screen.dart';
+import 'listen_aktionen.dart';
 import 'listen_screen.dart';
 import 'login_screen.dart';
 
@@ -89,6 +90,10 @@ class _SchliessenIntent extends Intent {
   const _SchliessenIntent();
 }
 
+class _ListeUmbenennenIntent extends Intent {
+  const _ListeUmbenennenIntent();
+}
+
 class _DreiSpalten extends StatefulWidget {
   const _DreiSpalten();
 
@@ -129,6 +134,8 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
             const _NeuIntent(),
         const SingleActivator(LogicalKeyboardKey.delete):
             const _LoeschenIntent(),
+        const SingleActivator(LogicalKeyboardKey.f2):
+            const _ListeUmbenennenIntent(),
         const SingleActivator(LogicalKeyboardKey.f5):
             const _AktualisierenIntent(),
         const SingleActivator(LogicalKeyboardKey.escape):
@@ -156,10 +163,26 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
           ),
           _LoeschenIntent: CallbackAction<_LoeschenIntent>(
             onInvoke: (_) {
+              // Schwebt die Maus über einer Liste, wird die Liste gelöscht,
+              // sonst die anvisierte Aufgabe.
+              final liste = _app.listeMitUid(_app.hoverListeUid);
+              if (liste != null) {
+                ListenAktionen.loeschen(context, liste);
+                return null;
+              }
               _mitZiel((uid) {
                 final a = _app.aufgabeMitUid(uid);
                 if (a != null) AufgabenScreen.loeschenBestaetigen(context, a);
               });
+              return null;
+            },
+          ),
+          _ListeUmbenennenIntent: CallbackAction<_ListeUmbenennenIntent>(
+            onInvoke: (_) {
+              // F2 benennt die überschwebte, sonst die aktive Liste um.
+              final liste = _app.listeMitUid(_app.hoverListeUid) ??
+                  _app.aktiveListe;
+              if (liste != null) ListenAktionen.umbenennen(context, liste);
               return null;
             },
           ),
@@ -261,32 +284,6 @@ class _ListenSpalte extends StatelessWidget {
     await context.read<AppState>().erstelleListe(name);
   }
 
-  Future<void> _loeschen(BuildContext context, Calendar liste) async {
-    final bestaetigt = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Liste "${liste.displayName}" löschen?'),
-        content: const Text(
-            'Alle Aufgaben dieser Liste werden endgültig gelöscht.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: TickdoneFarben.ueberfaellig),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Löschen'),
-          ),
-        ],
-      ),
-    );
-    if (bestaetigt == true && context.mounted) {
-      await context.read<AppState>().loescheListe(liste);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -329,19 +326,30 @@ class _ListenSpalte extends StatelessWidget {
             child: ListView(
               children: [
                 for (final liste in app.aufgabenlisten)
-                  GestureDetector(
-                    onSecondaryTap: () => _loeschen(context, liste),
-                    child: ListTile(
-                      dense: true,
-                      selected: app.aktiveListe?.uid == liste.uid,
-                      selectedTileColor: TickdoneFarben.flaecheGewaehlt,
-                      leading: Icon(Icons.checklist,
-                          color: listenFarbe(liste) ?? TickdoneFarben.akzent),
-                      title: Text(liste.displayName,
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      // Anzahl offener Aufgaben (leer, solange 0/unbekannt).
-                      trailing: ListenZaehler(app.offeneAnzahl(liste.uid)),
-                      onTap: () => context.read<AppState>().oeffneListe(liste),
+                  MouseRegion(
+                    // Hovern meldet die Liste für F2/Entf.
+                    onEnter: (_) =>
+                        context.read<AppState>().setzeListenHover(liste.uid),
+                    onExit: (_) =>
+                        context.read<AppState>().setzeListenHover(null),
+                    child: GestureDetector(
+                      // PC: Rechtsklick öffnet das Listen-Menü am Klickpunkt.
+                      onSecondaryTapDown: (d) => ListenAktionen.menue(
+                          context, liste, d.globalPosition),
+                      child: ListTile(
+                        dense: true,
+                        selected: app.aktiveListe?.uid == liste.uid,
+                        selectedTileColor: TickdoneFarben.flaecheGewaehlt,
+                        leading: Icon(Icons.checklist,
+                            color:
+                                listenFarbe(liste) ?? TickdoneFarben.akzent),
+                        title: Text(liste.displayName,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        // Anzahl offener Aufgaben (leer bei 0/unbekannt).
+                        trailing: ListenZaehler(app.offeneAnzahl(liste.uid)),
+                        onTap: () =>
+                            context.read<AppState>().oeffneListe(liste),
+                      ),
                     ),
                   ),
               ],
