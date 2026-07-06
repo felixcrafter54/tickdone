@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
-import 'listen_screen.dart';
+import 'haupt_screen.dart';
 
 /// Anmeldebildschirm: Server-URL, Benutzername, Passwort.
 ///
@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     if (erfolgreich && mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ListenScreen()),
+        MaterialPageRoute(builder: (_) => const HauptScreen()),
       );
     }
   }
@@ -55,7 +55,10 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
-            child: Form(
+            // AutofillGroup + autofillHints, damit Passwortmanager
+            // (Bitwarden, Google, Keychain) die Felder erkennen.
+            child: AutofillGroup(
+              child: Form(
               key: _formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -71,6 +74,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 24),
                   TextFormField(
                     controller: _serverController,
+                    autofillHints: const [AutofillHints.url],
+                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: 'Server-URL',
                       hintText: 'z.B. https://server.example.de',
@@ -85,6 +90,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _benutzerController,
+                    autofillHints: const [AutofillHints.username],
+                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: 'Benutzername',
                       prefixIcon: Icon(Icons.person_outline),
@@ -97,6 +104,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _passwortController,
+                    autofillHints: const [AutofillHints.password],
+                    textInputAction: TextInputAction.done,
                     decoration: InputDecoration(
                       labelText: 'Passwort',
                       prefixIcon: const Icon(Icons.lock_outline),
@@ -135,6 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ),

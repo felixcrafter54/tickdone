@@ -210,6 +210,21 @@ class CalDavService {
     );
   }
 
+  /// Legt ein bereits erzeugtes VTODO an (für optimistische Updates:
+  /// Das Model wurde lokal schon gebaut, hier nur noch der PUT).
+  /// Liefert den vom Server vergebenen ETag zurück.
+  Future<String?> legeAnMitIcal({
+    required Uri href,
+    required String ical,
+  }) async {
+    final antwort = await client.webdavClient.put(
+      href.toString(),
+      body: ical,
+      ifNoneMatch: '*',
+    );
+    return antwort.headers.value('etag');
+  }
+
   /// PUT einer Aufgabe; liefert das Model zum neuen Serverstand.
   Future<Aufgabe> _putAufgabe(Uri href, String ical, String? etag) async {
     final antwort = await client.webdavClient.put(

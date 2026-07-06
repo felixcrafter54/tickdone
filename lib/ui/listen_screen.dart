@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import 'app_theme.dart';
 import 'aufgaben_screen.dart';
 import 'login_screen.dart';
 
@@ -82,7 +83,10 @@ class ListenScreen extends StatelessWidget {
     final appState = context.watch<AppState>();
     final listen = appState.aufgabenlisten;
     return Scaffold(
+      // Navigationsbereich ist etwas dunkler (Design-Doc, Abschnitt 1).
+      backgroundColor: TickdoneFarben.sidebar,
       appBar: AppBar(
+        backgroundColor: TickdoneFarben.sidebar,
         title: const Text('Meine Listen'),
         actions: [
           IconButton(
