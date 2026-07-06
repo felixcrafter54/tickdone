@@ -33,6 +33,7 @@ class AufgabeDetailScreen extends StatefulWidget {
 }
 
 class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
+  late final AppState _app;
   late final TextEditingController _titelController;
   late final TextEditingController _notizController;
   final FocusNode _titelFokus = FocusNode();
@@ -41,33 +42,40 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final aufgabe = context.read<AppState>().aufgabeMitUid(widget.uid);
+    _app = context.read<AppState>();
+    final aufgabe = _app.aufgabeMitUid(widget.uid);
     _titelController = TextEditingController(text: aufgabe?.titel ?? '');
     _notizController = TextEditingController(text: aufgabe?.notiz ?? '');
     // Auto-Save beim Verlassen des Feldes (Spec, Abschnitt 3).
     _titelFokus.addListener(() {
       if (!_titelFokus.hasFocus) {
-        context
-            .read<AppState>()
-            .setzeTitel(widget.uid, _titelController.text);
+        _app.setzeTitel(widget.uid, _titelController.text);
       }
     });
     _notizFokus.addListener(() {
       if (!_notizFokus.hasFocus) {
-        context
-            .read<AppState>()
-            .setzeNotiz(widget.uid, _notizController.text);
+        _app.setzeNotiz(widget.uid, _notizController.text);
       }
     });
+  }
+
+  /// Titel und Notiz für [uid] speichern (falls geändert). Wird zusätzlich
+  /// beim Schließen/Wechseln/Verwerfen aufgerufen, damit auf Touch-Geräten
+  /// nichts verloren geht, wo "Feld verlassen" nicht immer auslöst.
+  void _speichereFelder(String uid) {
+    _app.setzeTitel(uid, _titelController.text);
+    _app.setzeNotiz(uid, _notizController.text);
   }
 
   @override
   void didUpdateWidget(AufgabeDetailScreen alt) {
     super.didUpdateWidget(alt);
     // Im Drei-Spalten-Layout bleibt dasselbe State-Objekt bestehen, wenn
-    // eine andere Aufgabe gewählt wird – dann Textfelder neu befüllen.
+    // eine andere Aufgabe gewählt wird – erst die alte sichern, dann neu
+    // befüllen.
     if (alt.uid != widget.uid) {
-      final aufgabe = context.read<AppState>().aufgabeMitUid(widget.uid);
+      _speichereFelder(alt.uid);
+      final aufgabe = _app.aufgabeMitUid(widget.uid);
       _titelController.text = aufgabe?.titel ?? '';
       _notizController.text = aufgabe?.notiz ?? '';
     }
@@ -75,6 +83,9 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
 
   @override
   void dispose() {
+    // Offene Eingaben sichern (z.B. wenn die Ansicht ohne Fokusverlust
+    // geschlossen wird).
+    _speichereFelder(widget.uid);
     _titelFokus.dispose();
     _notizFokus.dispose();
     _titelController.dispose();
@@ -83,10 +94,11 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
   }
 
   /// Detailansicht schließen: eingebettet die Auswahl zurücksetzen,
-  /// sonst die Route poppen.
+  /// sonst die Route poppen. Vorher offene Eingaben speichern.
   void _schliessen() {
+    _speichereFelder(widget.uid);
     if (widget.eingebettet) {
-      context.read<AppState>().waehleAufgabe(null);
+      _app.waehleAufgabe(null);
     } else {
       Navigator.of(context).pop();
     }
@@ -477,15 +489,16 @@ class _NaechsterSchrittState extends State<_NaechsterSchritt> {
     super.dispose();
   }
 
-  Future<void> _anlegen() async {
+  void _anlegen() {
     final titel = _controller.text.trim();
     if (titel.isEmpty) return;
     _controller.clear();
-    await context
+    // Fokus/Cursor bleiben im Feld, damit man direkt den nächsten Schritt
+    // tippen kann; das Anlegen läuft optimistisch im Hintergrund.
+    _fokus.requestFocus();
+    context
         .read<AppState>()
         .erstelleAufgabe(titel, parentUid: widget.parentUid);
-    // Fokus behalten, damit man mehrere Schritte hintereinander tippen kann.
-    _fokus.requestFocus();
   }
 
   @override

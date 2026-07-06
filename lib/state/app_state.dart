@@ -264,6 +264,20 @@ class AppState extends ChangeNotifier {
   /// Änderungen werden hinten angehängt (Spec, Abschnitt 2).
   final Map<String, Future<void>> _speicherKette = {};
 
+  /// Anzahl laufender Hintergrund-Speicherungen – für die Sync-Anzeige oben.
+  int _laufendeSpeicher = 0;
+  bool get speichertGerade => _laufendeSpeicher > 0;
+
+  void _speichernBegonnen() {
+    _laufendeSpeicher++;
+    notifyListeners();
+  }
+
+  void _speichernBeendet() {
+    if (_laufendeSpeicher > 0) _laufendeSpeicher--;
+    notifyListeners();
+  }
+
   /// Abhaken bzw. wieder öffnen – optimistisch.
   Future<void> setzeErledigt(String uid, bool erledigt) =>
       _aendereUndSpeichere(
@@ -328,19 +342,35 @@ class AppState extends ChangeNotifier {
 
   /// Neue Aufgabe (oder mit [parentUid] einen Schritt) anlegen.
   /// Nur hier wird die Liste neu geladen (Spec, Abschnitt 3).
+  /// Neue Aufgabe/Schritt OPTIMISTISCH anlegen: sofort unten anhängen und
+  /// anzeigen, im Hintergrund speichern (kein Neuladen, kein Warten – so
+  /// bleibt der Fokus im Eingabefeld für schnelle Mehrfacheingabe).
   Future<bool> erstelleAufgabe(String titel, {String? parentUid}) async {
     final liste = aktiveListe;
     final bereinigt = titel.trim();
     if (liste == null || bereinigt.isEmpty) return false;
+
+    final uid = neueUid();
+    final ical =
+        neuesVTodoIcal(uid: uid, titel: bereinigt, parentUid: parentUid);
+    final href = liste.href.resolve('$uid.ics');
+    final lokal = Aufgabe.ausICalendar(ical, href: href);
+    if (lokal == null) return false;
+
+    // Immer ans Ende anhängen (neue Aufgaben/Schritte unten).
+    aufgaben.add(lokal);
+    _speichernBegonnen();
     try {
-      await _caldav.erstelleAufgabe(liste,
-          titel: bereinigt, parentUid: parentUid);
-      await aufgabenNeuLaden();
+      final etag = await _caldav.legeAnMitIcal(href: href, ical: ical);
+      final index = aufgaben.indexWhere((a) => a.uid == uid);
+      if (index >= 0) aufgaben[index] = aufgaben[index].kopieMit(etag: etag);
       return true;
     } catch (fehler) {
+      aufgaben.removeWhere((a) => a.uid == uid);
       aufgabenFehler = 'Anlegen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
-      notifyListeners();
       return false;
+    } finally {
+      _speichernBeendet();
     }
   }
 
@@ -442,6 +472,7 @@ class AppState extends ChangeNotifier {
     _ersetzeAufgabe(lokal(aufgabe));
     notifyListeners();
 
+    _speichernBegonnen();
     final vorgaenger = _speicherKette[uid] ?? Future.value();
     final eigener = vorgaenger.then((_) async {
       // Frischen Stand nehmen: Ein vorheriges Update in der Kette kann
@@ -456,8 +487,7 @@ class AppState extends ChangeNotifier {
             'Speichern fehlgeschlagen: ${_lesbareMeldung(fehler)}';
         await aufgabenNeuLaden();
       }
-      notifyListeners();
-    });
+    }).whenComplete(_speichernBeendet);
     _speicherKette[uid] = eigener;
     return eigener;
   }

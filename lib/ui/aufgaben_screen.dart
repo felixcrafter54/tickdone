@@ -348,7 +348,9 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
         children: [
           // Inline-Zeile "Aufgabe hinzufügen" (Design-Doc, Abschnitt 3).
           NeueAufgabeZeile(focusNode: widget.neueAufgabeFokus),
-          if (appState.aufgabenLaden) const LinearProgressIndicator(),
+          // Dünne Anzeige oben, während im Hintergrund gesynct wird.
+          if (appState.aufgabenLaden || appState.speichertGerade)
+            const LinearProgressIndicator(minHeight: 2),
           if (appState.aufgabenFehler != null)
             Padding(
               padding: const EdgeInsets.all(12),
@@ -428,18 +430,25 @@ class NeueAufgabeZeile extends StatefulWidget {
 
 class _NeueAufgabeZeileState extends State<NeueAufgabeZeile> {
   final _controller = TextEditingController();
+  final _internFokus = FocusNode();
+
+  FocusNode get _fokus => widget.focusNode ?? _internFokus;
 
   @override
   void dispose() {
     _controller.dispose();
+    _internFokus.dispose();
     super.dispose();
   }
 
-  Future<void> _anlegen() async {
+  void _anlegen() {
     final titel = _controller.text.trim();
     if (titel.isEmpty) return;
     _controller.clear();
-    await context.read<AppState>().erstelleAufgabe(titel);
+    // Fokus/Tastatur bleiben, damit man mehrere Aufgaben hintereinander
+    // eingeben kann. Das Anlegen läuft optimistisch im Hintergrund.
+    _fokus.requestFocus();
+    context.read<AppState>().erstelleAufgabe(titel);
   }
 
   @override
@@ -448,7 +457,7 @@ class _NeueAufgabeZeileState extends State<NeueAufgabeZeile> {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: TextField(
         controller: _controller,
-        focusNode: widget.focusNode,
+        focusNode: _fokus,
         maxLines: 1,
         textInputAction: TextInputAction.done,
         decoration: const InputDecoration(
