@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/aufgabe.dart';
 import '../services/caldav_service.dart';
 import '../services/vtodo_patch.dart';
+import '../services/zugangsspeicher.dart';
 
 /// Sortierung der Aufgabenliste (Spec, Abschnitt 3).
 enum Sortierung {
@@ -35,6 +36,10 @@ enum AufgabenFilter {
 /// erst, wenn die App wirklich danach verlangt.
 class AppState extends ChangeNotifier {
   final CalDavService _caldav = CalDavService();
+  final Zugangsspeicher _speicher;
+
+  AppState([Zugangsspeicher? speicher])
+      : _speicher = speicher ?? Zugangsspeicher();
 
   bool laedt = false;
   String? fehlermeldung;
@@ -43,12 +48,35 @@ class AppState extends ChangeNotifier {
   bool get istVerbunden => _caldav.istVerbunden;
   String? get verbundeneUrl => _caldav.verbundeneUrl;
 
+  /// Gespeicherte Zugangsdaten (für das Vorbefüllen des Login-Formulars,
+  /// falls die automatische Anmeldung scheitert).
+  Zugang? gespeicherterZugang;
+
+  /// Beim Start EINMAL versuchen, mit gespeicherten Zugangsdaten anzumelden.
+  /// Nutzt die zuletzt funktionierende URL (spart die Discovery-Kette).
+  /// Gibt true zurück, wenn die automatische Anmeldung geklappt hat.
+  Future<bool> automatischAnmelden() async {
+    final zugang = await _speicher.laden();
+    gespeicherterZugang = zugang;
+    if (zugang == null) return false;
+    return anmelden(
+      serverUrl: zugang.aufloesung ?? zugang.server,
+      benutzer: zugang.benutzer,
+      passwort: zugang.passwort,
+      // Beim Auto-Login den ursprünglich eingegebenen Server als Anzeige
+      // behalten (nicht die aufgelöste URL).
+      anzeigeServer: zugang.server,
+    );
+  }
+
   /// Anmelden und direkt die Aufgabenlisten laden.
-  /// Gibt true zurück, wenn beides geklappt hat.
+  /// Gibt true zurück, wenn beides geklappt hat. Bei Erfolg werden die
+  /// Zugangsdaten sicher gespeichert.
   Future<bool> anmelden({
     required String serverUrl,
     required String benutzer,
     required String passwort,
+    String? anzeigeServer,
   }) async {
     laedt = true;
     fehlermeldung = null;
@@ -60,6 +88,13 @@ class AppState extends ChangeNotifier {
         passwort: passwort,
       );
       aufgabenlisten = await _caldav.ladeAufgabenlisten();
+      // Zugangsdaten + funktionierende URL sicher speichern.
+      await _speicher.speichern(
+        server: anzeigeServer ?? serverUrl,
+        benutzer: benutzer,
+        passwort: passwort,
+        aufloesung: _caldav.verbundeneUrl,
+      );
       // Standardliste direkt öffnen, Detailbereich bleibt zu.
       if (aufgabenlisten.isNotEmpty) {
         await oeffneListe(aufgabenlisten.first);
@@ -516,9 +551,11 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Verbindung trennen und Zustand leeren.
-  void abmelden() {
+  /// Verbindung trennen, gespeicherte Zugangsdaten löschen, Zustand leeren.
+  Future<void> abmelden() async {
     _caldav.trennen();
+    await _speicher.loeschen();
+    gespeicherterZugang = null;
     aufgabenlisten = [];
     aktiveListe = null;
     aktiveAufgabeUid = null;

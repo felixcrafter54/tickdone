@@ -3,14 +3,14 @@ import 'package:provider/provider.dart';
 
 import 'state/app_state.dart';
 import 'ui/app_theme.dart';
-import 'ui/login_screen.dart';
+import 'ui/start_screen.dart';
 
 void main() {
   runApp(const TickdoneApp());
 }
 
-/// Einstiegspunkt: stellt den AppState per Provider bereit
-/// und startet mit dem Anmeldebildschirm.
+/// Einstiegspunkt: stellt den AppState per Provider bereit und startet mit
+/// dem Start-Screen (versucht automatische Anmeldung).
 class TickdoneApp extends StatelessWidget {
   const TickdoneApp({super.key});
 
@@ -22,7 +22,7 @@ class TickdoneApp extends StatelessWidget {
         title: 'Tickdone',
         // Dunkles Theme mit violettem Akzent (TICKDONE_DESIGN.md).
         theme: tickdoneTheme(),
-        home: const LoginScreen(),
+        home: const StartScreen(),
       ),
     );
   }
