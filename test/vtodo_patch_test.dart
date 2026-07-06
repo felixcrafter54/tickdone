@@ -186,6 +186,13 @@ void main() {
       expect(aufgabe.istSchritt, isFalse);
     });
 
+    test('sortOrder schreibt X-APPLE-SORT-ORDER und wird geparst', () {
+      final ical =
+          neuesVTodoIcal(uid: 'neu-sort', titel: 'Oben', sortOrder: -1024);
+      expect(ical, contains('X-APPLE-SORT-ORDER:-1024'));
+      expect(Aufgabe.ausICalendar(ical)!.sortOrder, -1024);
+    });
+
     test('mit parentUid entsteht ein Schritt (RELTYPE=PARENT)', () {
       final ical = neuesVTodoIcal(
         uid: 'neu-2',

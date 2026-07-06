@@ -351,13 +351,20 @@ class AppState extends ChangeNotifier {
     if (liste == null || bereinigt.isEmpty) return false;
 
     final uid = neueUid();
-    final ical =
-        neuesVTodoIcal(uid: uid, titel: bereinigt, parentUid: parentUid);
+    // Neue Hauptaufgaben nach ganz oben (kleinste Sortierung); Schritte
+    // ohne Sortierung, damit sie unten angehängt werden.
+    final int? sortOrder =
+        parentUid == null ? _naechsterSortWertOben() : null;
+    final ical = neuesVTodoIcal(
+      uid: uid,
+      titel: bereinigt,
+      parentUid: parentUid,
+      sortOrder: sortOrder,
+    );
     final href = liste.href.resolve('$uid.ics');
     final lokal = Aufgabe.ausICalendar(ical, href: href);
     if (lokal == null) return false;
 
-    // Immer ans Ende anhängen (neue Aufgaben/Schritte unten).
     aufgaben.add(lokal);
     _speichernBegonnen();
     try {
@@ -372,6 +379,16 @@ class AppState extends ChangeNotifier {
     } finally {
       _speichernBeendet();
     }
+  }
+
+  /// Sortierwert, der eine neue Hauptaufgabe an den Anfang stellt:
+  /// 1024 unter das aktuelle Minimum (kleiner = weiter oben).
+  int _naechsterSortWertOben() {
+    final werte = aufgaben
+        .where((a) => !a.istSchritt && a.sortOrder != null)
+        .map((a) => a.sortOrder!);
+    final minWert = werte.isEmpty ? 1024 : werte.reduce((a, b) => a < b ? a : b);
+    return minWert - 1024;
   }
 
   /// Schritt zur eigenständigen Aufgabe höherstufen

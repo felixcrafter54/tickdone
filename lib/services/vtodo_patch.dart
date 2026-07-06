@@ -125,10 +125,12 @@ String neueUid() {
 
 /// Erzeugt das iCalendar für eine neue Aufgabe bzw. einen neuen Schritt
 /// (mit [parentUid] als RELATED-TO;RELTYPE=PARENT, Spec Abschnitt 2).
+/// [sortOrder] setzt X-APPLE-SORT-ORDER (kleiner = weiter oben).
 String neuesVTodoIcal({
   required String uid,
   required String titel,
   String? parentUid,
+  int? sortOrder,
   DateTime? jetzt,
 }) {
   final stempel = _utcStempel((jetzt ?? DateTime.now()).toUtc());
@@ -144,6 +146,7 @@ String neuesVTodoIcal({
     'SUMMARY:${_escapeText(titel)}',
     'STATUS:NEEDS-ACTION',
     'SEQUENCE:0',
+    if (sortOrder != null) 'X-APPLE-SORT-ORDER:$sortOrder',
     if (parentUid != null) 'RELATED-TO;RELTYPE=PARENT:$parentUid',
     'END:VTODO',
     'END:VCALENDAR',

@@ -172,11 +172,14 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               children: [
-                for (final schritt in schritte) ...[
+                for (final schritt in schritte)
                   _SchrittZeile(key: ValueKey(schritt.uid), schritt: schritt),
-                  const Divider(height: 1, color: TickdoneFarben.rahmen),
-                ],
-                _NaechsterSchritt(parentUid: widget.uid),
+                // Stabiler Key: bleibt fokussiert, wenn oben ein neuer
+                // Schritt optimistisch eingefügt wird (Cursor/Tastatur weg).
+                _NaechsterSchritt(
+                  key: const ValueKey('naechster-schritt'),
+                  parentUid: widget.uid,
+                ),
                 const SizedBox(height: 20),
                 _meinTagZeile(aufgabe),
                 const Divider(height: 1, color: TickdoneFarben.rahmen),
@@ -393,8 +396,10 @@ class _SchrittZeileState extends State<_SchrittZeile> {
   @override
   Widget build(BuildContext context) {
     final schritt = widget.schritt;
-    return Row(
+    return Column(
       children: [
+        Row(
+          children: [
         IconButton(
           icon: Icon(
             schritt.erledigt
@@ -455,6 +460,9 @@ class _SchrittZeileState extends State<_SchrittZeile> {
             ),
           ],
         ),
+          ],
+        ),
+        const Divider(height: 1, color: TickdoneFarben.rahmen),
       ],
     );
   }
@@ -464,7 +472,7 @@ class _SchrittZeileState extends State<_SchrittZeile> {
 /// Schrift, kein Rahmen. Das Plus sitzt an der Kreis-Position und wird
 /// beim Reinklicken (Fokus) zum leeren Schrittkreis.
 class _NaechsterSchritt extends StatefulWidget {
-  const _NaechsterSchritt({required this.parentUid});
+  const _NaechsterSchritt({super.key, required this.parentUid});
 
   final String parentUid;
 
