@@ -68,6 +68,9 @@ class CalDavService {
         baseUrl: url,
         username: benutzer,
         password: passwort,
+        // Über HTTPS (Betrieb hinter NPM) streng; nur beim lokalen Testen
+        // über http://localhost unverschlüsselt zulassen.
+        allowInsecure: url.startsWith('http://'),
       );
       _verbundeneUrl = url;
       return;
