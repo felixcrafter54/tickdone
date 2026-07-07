@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'services/einstellungen_speicher.dart';
@@ -8,6 +10,13 @@ import 'ui/start_screen.dart';
 import 'ui/verbindungs_ueberwachung.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Im Web das native Browser-Kontextmenü unterdrücken, damit beim Rechtsklick
+  // nur die eigenen Menüs (Listen/Aufgaben) erscheinen – nicht zusätzlich das
+  // des Browsers.
+  if (kIsWeb) {
+    BrowserContextMenu.disableContextMenu();
+  }
   runApp(const TickdoneApp());
 }
 
