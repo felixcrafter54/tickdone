@@ -83,9 +83,19 @@ class AppState extends ChangeNotifier {
   Future<void> synchronisiereJetzt() => _synchronisiere();
 
   /// Ob eine Änderung ein Verbindungsproblem ist (dann offline vormerken)
-  /// oder eine echte Server-Ablehnung (dann Fehler zeigen).
+  /// oder eine echte Server-Ablehnung (dann zusätzlich Hinweis zeigen).
+  ///
+  /// Deckt beide Plattformen ab:
+  /// - Native App: DNS-/Verbindungsfehler ("Failed host lookup") → keine
+  ///   Antwort → response == null.
+  /// - Web hinter dem nginx-Reverse-Proxy: erreicht der Proxy den CalDAV-Server
+  ///   nicht, kommt 502/503/504 zurück; ein abgebrochener Browser-XHR gibt 0.
   bool _istNetzwerkfehler(Object fehler) {
-    if (fehler is DioException) return fehler.response == null;
+    if (fehler is DioException) {
+      final status = fehler.response?.statusCode;
+      if (status == null) return true;
+      return status == 0 || status == 502 || status == 503 || status == 504;
+    }
     if (fehler is StateError) return true; // z.B. "Nicht verbunden"
     return false;
   }
@@ -98,8 +108,10 @@ class AppState extends ChangeNotifier {
   }
 
   /// Ausstehende Änderungen der Reihe nach zum Server schreiben. Läuft nur
-  /// einmal gleichzeitig; bricht bei Verbindungsproblemen ab (Rest bleibt für
-  /// später). Dauerhafte Fehler verwerfen den Eintrag, damit er nicht blockiert.
+  /// einmal gleichzeitig. Es wird NIE ein Eintrag verworfen (kein Datenverlust):
+  /// bei Verbindungsproblemen wird abgebrochen (gesamter Rest bleibt für
+  /// später), bei anderen Fehlern bleibt der Eintrag erhalten und die übrigen
+  /// werden weiter versucht.
   Future<void> _synchronisiere() async {
     if (_syncLaeuft || !istVerbunden || _queue.istLeer) return;
     _syncLaeuft = true;
@@ -112,11 +124,14 @@ class AppState extends ChangeNotifier {
           await _cache.speichereQueue(_queue);
           notifyListeners();
         } catch (fehler) {
+          // Bei Verbindungsproblem ganz abbrechen – die Verbindung ist weg,
+          // der komplette Rest wird später erneut versucht.
           if (_istNetzwerkfehler(fehler)) break;
+          // Anderer Fehler: Eintrag NICHT verwerfen (Daten bleiben erhalten),
+          // Hinweis zeigen und mit den übrigen weitermachen.
           aufgabenFehler =
-              'Synchronisieren fehlgeschlagen: ${_lesbareMeldung(fehler)}';
-          _queue.entferne(aenderung.uid);
-          await _cache.speichereQueue(_queue);
+              'Synchronisieren einer Änderung fehlgeschlagen: '
+              '${_lesbareMeldung(fehler)}';
         }
       }
     } finally {
@@ -802,19 +817,19 @@ class AppState extends ChangeNotifier {
       if (index >= 0) aufgaben[index] = aufgaben[index].kopieMit(etag: etag);
       return true;
     } catch (fehler) {
-      if (_istNetzwerkfehler(fehler)) {
-        // Offline: Aufgabe lokal behalten und Neuanlage vormerken.
-        await _merkeVor(() => _queue.merkePut(
-              uid: uid,
-              href: href.toString(),
-              ical: ical,
-              neu: true,
-            ));
-        return true;
+      // Aufgabe NIE wegen eines Fehlers löschen – lokal behalten und die
+      // Neuanlage vormerken (offline ODER sonstiger Fehler). So geht eine
+      // gerade erstellte Aufgabe niemals verloren.
+      await _merkeVor(() => _queue.merkePut(
+            uid: uid,
+            href: href.toString(),
+            ical: ical,
+            neu: true,
+          ));
+      if (!_istNetzwerkfehler(fehler)) {
+        aufgabenFehler = 'Anlegen wird nachgeholt: ${_lesbareMeldung(fehler)}';
       }
-      aufgaben.removeWhere((a) => a.uid == uid);
-      aufgabenFehler = 'Anlegen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
-      return false;
+      return true;
     } finally {
       _speichernBeendet();
     }
@@ -918,23 +933,22 @@ class AppState extends ChangeNotifier {
       await aufgabenNeuLaden();
       return true;
     } catch (fehler) {
-      if (_istNetzwerkfehler(fehler)) {
-        // Offline: lokal entfernt lassen und Löschungen vormerken.
-        await _merkeVor(() {
-          for (final einzelne in zuLoeschen) {
-            _queue.merkeLoeschen(
-              uid: einzelne.uid,
-              href: einzelne.href?.toString() ?? '',
-              ifMatch: einzelne.etag,
-            );
-          }
-        });
-        return true;
+      // Löschung NIE verwerfen – lokal entfernt lassen und vormerken (offline
+      // ODER sonstiger Fehler). Ein Zurückladen würde die Aufgabe fälschlich
+      // wieder einblenden, obwohl der Nutzer sie löschen wollte.
+      await _merkeVor(() {
+        for (final einzelne in zuLoeschen) {
+          _queue.merkeLoeschen(
+            uid: einzelne.uid,
+            href: einzelne.href?.toString() ?? '',
+            ifMatch: einzelne.etag,
+          );
+        }
+      });
+      if (!_istNetzwerkfehler(fehler)) {
+        aufgabenFehler = 'Löschen wird nachgeholt: ${_lesbareMeldung(fehler)}';
       }
-      aufgabenFehler = 'Löschen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
-      // Anzeige wieder mit dem Server abgleichen.
-      await aufgabenNeuLaden();
-      return false;
+      return true;
     }
   }
 
@@ -978,18 +992,18 @@ class AppState extends ChangeNotifier {
         // Erfolgreich = online: evtl. aufgestaute Änderungen nachziehen.
         unawaited(_synchronisiere());
       } catch (fehler) {
-        if (_istNetzwerkfehler(fehler)) {
-          // Offline: Änderung für später vormerken (verlustfrei).
-          await _merkeVor(() => _queue.merkePut(
-                uid: uid,
-                href: aktuelle.href.toString(),
-                ical: neuesIcal,
-                ifMatch: aktuelle.etag,
-              ));
-        } else {
+        // Änderung NIE verwerfen/zurückrollen – für später vormerken (offline
+        // ODER sonstiger Fehler). Die lokale (optimistische) Anzeige bleibt so
+        // erhalten und geht nicht durch ein Neuladen verloren.
+        await _merkeVor(() => _queue.merkePut(
+              uid: uid,
+              href: aktuelle.href.toString(),
+              ical: neuesIcal,
+              ifMatch: aktuelle.etag,
+            ));
+        if (!_istNetzwerkfehler(fehler)) {
           aufgabenFehler =
-              'Speichern fehlgeschlagen: ${_lesbareMeldung(fehler)}';
-          await aufgabenNeuLaden();
+              'Speichern wird nachgeholt: ${_lesbareMeldung(fehler)}';
         }
       }
     }).whenComplete(_speichernBeendet);
