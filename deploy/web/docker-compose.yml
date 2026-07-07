@@ -1,5 +1,8 @@
 # Tickdone-Web-Container hinter dem bestehenden Nginx Proxy Manager (NPM).
 # NPM macht SSL + Forward auf diesen Container; hier liegt die Proxy-Config.
+#
+# WICHTIG: vorher den Web-Build erzeugen, damit build/web existiert:
+#   flutter build web --release
 services:
   tickdone-web:
     build:

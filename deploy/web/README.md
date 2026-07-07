@@ -25,19 +25,33 @@ Container.
 
 ## Schritte
 
-1. **Bauen** (Repo-Wurzel als Kontext):
+Das Docker-Image enthält **kein** Flutter – der Web-Build wird vorher mit deinem
+vorhandenen Flutter erzeugt und dann nur in ein schlankes nginx kopiert (kein
+GB-großes SDK-Image, kein Dart-Versions-Ärger, Build in Sekunden).
+
+1. **Web-Build erzeugen** (auf einem Rechner mit Flutter):
+   ```bash
+   flutter build web --release
+   ```
+   Ergebnis liegt in `build/web` (ca. 40 MB, nicht in git).
+
+   > Baust du auf einem anderen Rechner als dem Docker-Host (z.B. Flutter auf
+   > Windows, Docker auf Linux)? Dann `build/web` einfach in den Projektordner
+   > auf dem Docker-Host kopieren (nach `build/web`).
+
+2. **Image bauen** (Repo-Wurzel als Kontext, `build/web` muss existieren):
    ```bash
    docker build -f deploy/web/Dockerfile -t tickdone-web .
    ```
    oder per Compose: `docker compose -f deploy/web/docker-compose.yml up -d --build`
 
-2. **In NPM einhängen** (Variante B):
+3. **In NPM einhängen** (Variante B):
    - Proxy Host `tickdone.<eure-domain>` anlegen.
    - Forward Hostname/IP: `tickdone-web`, Port `80` (Container im gemeinsamen
      Docker-Netz – dazu in der `docker-compose.yml` das NPM-Netz aktivieren).
    - SSL-Zertifikat wie gewohnt in NPM.
 
-3. **Aufrufen**: `https://tickdone.<eure-domain>` → Login mit Benutzer/Passwort
+4. **Aufrufen**: `https://tickdone.<eure-domain>` → Login mit Benutzer/Passwort
    (kein Server-Feld nötig).
 
 ## Wichtig / Fallstricke
