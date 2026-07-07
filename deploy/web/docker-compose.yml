@@ -8,8 +8,9 @@
 #  - LOKAL (selbst bauen; vorher `flutter build web --release`, build/web noetig):
 #      docker compose -f deploy/web/docker-compose.yml up --build
 #
-# `image:` = Ziel in GHCR (wird von der CI gepusht). Da auch `build:` gesetzt
-# ist, taggt ein lokaler `--build` das Ergebnis auf denselben Namen.
+# Die CalDAV-Server-Adresse kommt aus CALDAV_HOST (nicht im Image!). Am
+# einfachsten via .env-Datei neben dieser Compose-Datei (deploy/web/.env,
+# nicht in git). Siehe .env.example.
 services:
   tickdone-web:
     image: ghcr.io/felixcrafter54/tickdone-web:latest
@@ -19,6 +20,9 @@ services:
       dockerfile: deploy/web/Dockerfile
     container_name: tickdone-web
     restart: unless-stopped
+    environment:
+      # Zielserver – aus deploy/web/.env (CALDAV_HOST=...). Pflicht.
+      CALDAV_HOST: ${CALDAV_HOST:?CALDAV_HOST fehlt – in deploy/web/.env setzen}
     # Zum lokalen Testen einen Port veröffentlichen; für den Betrieb hinter NPM
     # nicht nötig (NPM erreicht den Container über das gemeinsame Docker-Netz).
     ports:
