@@ -73,6 +73,12 @@ void _setzeText(VTodo vtodo, String name, String? wert) {
   );
 }
 
+/// Manuelle Reihenfolge setzen (X-APPLE-SORT-ORDER, kleiner = weiter oben).
+IcalPatch sortOrderPatch(int wert) => (ical) => patcheVTodo(ical, (vtodo) {
+      vtodo.properties.removeWhere((p) => p.name == 'X-APPLE-SORT-ORDER');
+      vtodo.properties.add(TextProperty('X-APPLE-SORT-ORDER:$wert'));
+    });
+
 /// Fälligkeit setzen oder (mit null) entfernen.
 IcalPatch faelligPatch(DateTime? datum) =>
     (ical) => patcheVTodo(ical, (vtodo) => vtodo.due = datum);

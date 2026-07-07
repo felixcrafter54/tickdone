@@ -565,6 +565,41 @@ class AppState extends ChangeNotifier {
         patch: faelligPatch(datum),
       );
 
+  /// Manuelle Reihenfolge einer einzelnen Aufgabe setzen (optimistisch).
+  Future<void> setzeSortOrder(String uid, int wert) => _aendereUndSpeichere(
+        uid,
+        lokal: (a) => a.kopieMit(sortOrder: wert),
+        patch: sortOrderPatch(wert),
+      );
+
+  /// Aufgabe per Drag & Drop umsortieren (nur in Sortierung "Manuell").
+  /// [neuIndex] ist bereits um das entfernte Element angepasst
+  /// (ReorderableListView.onReorderItem). Vergibt neue
+  /// X-APPLE-SORT-ORDER-Werte im Abstand 1024 und speichert nur die
+  /// geänderten – optimistisch, ohne Neuladen.
+  Future<void> ordneAufgabenNeu(int altIndex, int neuIndex) =>
+      _ordneNeu(List<Aufgabe>.from(wurzelAufgaben), altIndex, neuIndex);
+
+  /// Schritte einer Aufgabe per Drag & Drop umsortieren.
+  Future<void> ordneSchritteNeu(
+          String parentUid, int altIndex, int neuIndex) =>
+      _ordneNeu(schritteVon(parentUid), altIndex, neuIndex);
+
+  Future<void> _ordneNeu(
+      List<Aufgabe> liste, int altIndex, int neuIndex) async {
+    if (altIndex < 0 || altIndex >= liste.length) return;
+    final ziel = neuIndex.clamp(0, liste.length - 1);
+    if (ziel == altIndex) return;
+    final bewegt = liste.removeAt(altIndex);
+    liste.insert(ziel, bewegt);
+    for (var i = 0; i < liste.length; i++) {
+      final wert = (i + 1) * 1024;
+      if (liste[i].sortOrder != wert) {
+        await setzeSortOrder(liste[i].uid, wert);
+      }
+    }
+  }
+
   /// "Wichtig" (Stern) setzen/entfernen – gespeichert als PRIORITY 1.
   Future<void> setzeWichtig(String uid, bool wichtig) =>
       _aendereUndSpeichere(

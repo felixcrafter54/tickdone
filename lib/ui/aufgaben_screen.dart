@@ -438,39 +438,62 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                         ),
                       ],
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      itemCount: aufgaben.length,
-                      itemBuilder: (context, index) {
-                        final aufgabe = aufgaben[index];
-                        // Highlight: im Auswahlmodus die Ausgewählten,
-                        // sonst (eingebettet) die im Detail geöffnete.
-                        final markiert = _auswahlModus
-                            ? _auswahl.contains(aufgabe.uid)
-                            : widget.eingebettet &&
-                                appState.aktiveAufgabeUid == aufgabe.uid;
-                        // Rechtsklick wirkt auf die gesamte Auswahl, wenn
-                        // die Zeile Teil einer Mehrfachauswahl ist.
-                        final ziele = (_auswahl.contains(aufgabe.uid) &&
-                                _auswahl.length > 1)
-                            ? _ausgewaehlteAufgaben(appState)
-                            : [aufgabe];
-                        return AufgabenZeile(
-                          aufgabe: aufgabe,
-                          fortschritt: appState.fortschrittVon(aufgabe.uid),
-                          ausgewaehlt: markiert,
-                          auswahlModus: _auswahlModus,
-                          kontextZiele: ziele,
-                          onTap: () => _aufTap(aufgabe),
-                          // Langes Drücken (Touch) = Mehrfachauswahl.
-                          onLongPress: () => _auswahlUmschalten(aufgabe.uid),
-                        );
-                      },
-                    ),
+                  : _liste(context, appState, aufgaben),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// Umsortieren per Ziehgriff ist nur in Sortierung "Manuell" sinnvoll –
+  /// und nicht im Auswahlmodus/Filter/Smart-Liste (dort ist die Anzeige
+  /// nicht 1:1 die manuelle Reihenfolge).
+  bool _umsortierbar(AppState app) =>
+      app.sortierung == Sortierung.manuell &&
+      app.filter == AufgabenFilter.alle &&
+      app.aktiveSmartliste == null &&
+      !_auswahlModus;
+
+  Widget _zeile(BuildContext context, AppState appState, Aufgabe aufgabe,
+      int index) {
+    final markiert = _auswahlModus
+        ? _auswahl.contains(aufgabe.uid)
+        : widget.eingebettet && appState.aktiveAufgabeUid == aufgabe.uid;
+    final ziele = (_auswahl.contains(aufgabe.uid) && _auswahl.length > 1)
+        ? _ausgewaehlteAufgaben(appState)
+        : [aufgabe];
+    return AufgabenZeile(
+      key: ValueKey(aufgabe.uid),
+      aufgabe: aufgabe,
+      fortschritt: appState.fortschrittVon(aufgabe.uid),
+      ausgewaehlt: markiert,
+      auswahlModus: _auswahlModus,
+      kontextZiele: ziele,
+      onTap: () => _aufTap(aufgabe),
+      onLongPress: () => _auswahlUmschalten(aufgabe.uid),
+      ziehIndex: _umsortierbar(appState) ? index : null,
+    );
+  }
+
+  Widget _liste(
+      BuildContext context, AppState appState, List<Aufgabe> aufgaben) {
+    if (_umsortierbar(appState)) {
+      return ReorderableListView.builder(
+        buildDefaultDragHandles: false,
+        padding: const EdgeInsets.only(bottom: 12),
+        itemCount: aufgaben.length,
+        onReorderItem: (alt, neu) =>
+            context.read<AppState>().ordneAufgabenNeu(alt, neu),
+        itemBuilder: (context, index) =>
+            _zeile(context, appState, aufgaben[index], index),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 12),
+      itemCount: aufgaben.length,
+      itemBuilder: (context, index) =>
+          _zeile(context, appState, aufgaben[index], index),
     );
   }
 }
@@ -546,6 +569,7 @@ class AufgabenZeile extends StatelessWidget {
     this.kontextZiele,
     required this.onTap,
     this.onLongPress,
+    this.ziehIndex,
   });
 
   final Aufgabe aufgabe;
@@ -561,6 +585,9 @@ class AufgabenZeile extends StatelessWidget {
   final List<Aufgabe>? kontextZiele;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+
+  /// Wenn gesetzt (Sortierung "Manuell"): Ziehgriff rechts zum Umsortieren.
+  final int? ziehIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -616,16 +643,32 @@ class AufgabenZeile extends StatelessWidget {
             : TextStyle(color: context.farben.text),
       ),
       subtitle: _untertitel(context),
-      // Stern = als wichtig markieren (hohe Priorität).
-      trailing: IconButton(
-        icon: aufgabe.wichtig
-            ? Icon(Icons.star, color: context.farben.favorit)
-            : Icon(Icons.star_border, color: context.farben.textGedimmt),
-        tooltip:
-            aufgabe.wichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
-        onPressed: () => context
-            .read<AppState>()
-            .setzeWichtig(aufgabe.uid, !aufgabe.wichtig),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Stern = als wichtig markieren (hohe Priorität).
+          IconButton(
+            icon: aufgabe.wichtig
+                ? Icon(Icons.star, color: context.farben.favorit)
+                : Icon(Icons.star_border, color: context.farben.textGedimmt),
+            tooltip: aufgabe.wichtig
+                ? 'Wichtig entfernen'
+                : 'Als wichtig markieren',
+            onPressed: () => context
+                .read<AppState>()
+                .setzeWichtig(aufgabe.uid, !aufgabe.wichtig),
+          ),
+          // Ziehgriff nur in Sortierung "Manuell".
+          if (ziehIndex != null)
+            ReorderableDragStartListener(
+              index: ziehIndex!,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 4, right: 4),
+                child: Icon(Icons.drag_handle,
+                    color: context.farben.textGedimmt),
+              ),
+            ),
+        ],
       ),
       onTap: onTap,
       onLongPress: onLongPress,
