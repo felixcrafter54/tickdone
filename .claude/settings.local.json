@@ -36,7 +36,9 @@
       "PowerShell(git checkout -- .claude/settings.local.json 2>$null)",
       "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" pr merge 15 --repo felixcrafter54/tickdone --merge --delete-branch)",
       "PowerShell(git branch -D feature/einstellungen 2>$null)",
-      "PowerShell(git checkout -b feature/scroll-verhalten)"
+      "PowerShell(git checkout -b feature/scroll-verhalten)",
+      "PowerShell(git checkout -b feature/schritt-reihenfolge)",
+      "PowerShell(git push -u origin feature/schritt-reihenfolge)"
     ]
   }
 }
