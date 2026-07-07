@@ -22,6 +22,14 @@ server {
   gzip_types text/plain text/css application/javascript application/json
              application/wasm image/svg+xml application/manifest+json;
 
+  # RFC-6764-Discovery (.well-known/caldav) NICHT von der SPA beantworten
+  # lassen: sonst nimmt das caldav-Paket die 200-SPA-Antwort faelschlich als
+  # CalDAV-Endpunkt und macht darauf PROPFIND -> 405 -> Login scheitert.
+  # 404 ist der dokumentierte Fallback -> das Paket nutzt korrekt die
+  # Basis /caldav/ (die hrefs sind ohnehin same-origin-Pfade).
+  location = /.well-known/caldav { return 404; }
+  location = /.well-known/carddav { return 404; }
+
   # Flutter-Web ist eine SPA: unbekannte Pfade auf index.html (Client-Routing).
   location / {
     try_files $uri $uri/ /index.html;
