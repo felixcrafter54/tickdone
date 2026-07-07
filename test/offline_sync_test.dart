@@ -16,21 +16,42 @@ import 'package:tickdone/state/app_state.dart';
 /// Schreib-/Löschaufrufe der Queue-Abarbeitung.
 class FakeCalDav extends CalDavService {
   final bool online;
+
+  /// Schreiboperationen (Anlegen/Ändern) schlagen fehl.
   final bool wirftNetzwerkfehler;
+
+  /// Status des geworfenen Fehlers: null = keine Antwort (Verbindungsproblem),
+  /// 0 = abgebrochener Browser-XHR, sonst ein echter HTTP-Status.
+  final int? fehlerStatus;
+
+  /// Wenn gesetzt: die Queue-Abarbeitung (schreibeRoh) wirft mit diesem Status.
+  final int? syncFehlerStatus;
+
   int puts = 0;
   int deletes = 0;
 
-  FakeCalDav({this.online = false, this.wirftNetzwerkfehler = true});
+  FakeCalDav({
+    this.online = false,
+    this.wirftNetzwerkfehler = true,
+    this.fehlerStatus,
+    this.syncFehlerStatus,
+  });
 
   @override
   bool get istVerbunden => online;
 
-  DioException get _netz =>
-      DioException(requestOptions: RequestOptions(path: ''));
+  DioException _fehler(int? status) {
+    final ro = RequestOptions(path: '');
+    return DioException(
+      requestOptions: ro,
+      response:
+          status == null ? null : Response(requestOptions: ro, statusCode: status),
+    );
+  }
 
   @override
   Future<Aufgabe> speichereAenderung(Aufgabe aufgabe, IcalPatch patch) async {
-    if (wirftNetzwerkfehler) throw _netz;
+    if (wirftNetzwerkfehler) throw _fehler(fehlerStatus);
     return Aufgabe.ausICalendar(patch(aufgabe.rohIcal),
         etag: 'neu', href: aufgabe.href)!;
   }
@@ -38,13 +59,14 @@ class FakeCalDav extends CalDavService {
   @override
   Future<String?> legeAnMitIcal(
       {required Uri href, required String ical}) async {
-    if (wirftNetzwerkfehler) throw _netz;
+    if (wirftNetzwerkfehler) throw _fehler(fehlerStatus);
     return 'neu';
   }
 
   @override
   Future<Aufgabe> schreibeRoh(Uri href, String ical,
       {String? ifMatch, bool ifNoneMatch = false}) async {
+    if (syncFehlerStatus != null) throw _fehler(syncFehlerStatus);
     puts++;
     return Aufgabe.ausICalendar(ical, etag: 'srv', href: href)!;
   }
@@ -163,6 +185,74 @@ void main() {
 
       expect(state.ausstehendeAnzahl, 1);
       expect(fake.puts, 0);
+    });
+  });
+
+  group('Kein Datenverlust bei Fehlern', () {
+    Calendar liste() => Calendar(
+          uid: 'l1',
+          href: Uri.parse('https://server/liste/'),
+          displayName: 'L1',
+          supportedComponents: const ['VTODO'],
+        );
+
+    // Proxy-502 (Web: nginx erreicht CalDAV-Server nicht) und 0/null (XHR/DNS)
+    // gelten als Verbindungsproblem -> Neuanlage bleibt, kein Fehlerhinweis.
+    for (final status in [502, 0]) {
+      test('Verbindungsproblem (Status $status) -> Neuanlage bleibt', () async {
+        final cache = neuerCache();
+        final state =
+            AppState(null, null, cache, FakeCalDav(fehlerStatus: status));
+        state.aktiveListe = liste();
+
+        final ok = await state.erstelleAufgabe('Wichtig offline');
+
+        expect(ok, isTrue);
+        expect(state.wurzelAufgaben.any((a) => a.titel == 'Wichtig offline'),
+            isTrue);
+        expect(state.ausstehendeAnzahl, 1);
+        expect(state.aufgabenFehler, isNull);
+      });
+    }
+
+    test('auch bei echtem Serverfehler (400) wird die Neuanlage NIE gelöscht',
+        () async {
+      final cache = neuerCache();
+      final state = AppState(null, null, cache, FakeCalDav(fehlerStatus: 400));
+      state.aktiveListe = liste();
+
+      final ok = await state.erstelleAufgabe('Nicht verlieren');
+
+      // Aufgabe bleibt lokal + wird vorgemerkt (kein Datenverlust), aber mit
+      // Hinweis, weil es kein Netzwerkfehler war.
+      expect(ok, isTrue);
+      expect(
+          state.wurzelAufgaben.any((a) => a.titel == 'Nicht verlieren'), isTrue);
+      expect(state.ausstehendeAnzahl, 1);
+      expect(state.aufgabenFehler, isNotNull);
+    });
+
+    test('Sync verwirft bei Nicht-Netzwerkfehler den Eintrag NICHT', () async {
+      final cache = neuerCache();
+      final vorbereitet = SyncQueue();
+      vorbereitet.merkePut(
+        uid: 'u1',
+        href: 'https://server/liste/u1.ics',
+        ical: neuesVTodoIcal(uid: 'u1', titel: 'A'),
+        ifMatch: 'e1',
+      );
+      await cache.speichereQueue(vorbereitet);
+
+      final fake = FakeCalDav(online: true, syncFehlerStatus: 400);
+      final state = AppState(null, null, cache, fake);
+      await state.ladeCache();
+
+      await state.synchronisiereJetzt();
+
+      // Eintrag bleibt erhalten (kein Datenverlust), Hinweis gesetzt.
+      expect(state.ausstehendeAnzahl, 1);
+      expect((await cache.ladeQueue()).anzahl, 1);
+      expect(state.aufgabenFehler, isNotNull);
     });
   });
 }
