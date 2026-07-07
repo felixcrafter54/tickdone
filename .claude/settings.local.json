@@ -38,7 +38,8 @@
       "PowerShell(git branch -D feature/einstellungen 2>$null)",
       "PowerShell(git checkout -b feature/scroll-verhalten)",
       "PowerShell(git checkout -b feature/schritt-reihenfolge)",
-      "PowerShell(git push -u origin feature/schritt-reihenfolge)"
+      "PowerShell(git push -u origin feature/schritt-reihenfolge)",
+      "Bash(find \"$HOME/AppData/Local/Pub/Cache/hosted\" -path \"*caldav*/lib/*\" -name \"*.dart\" 2>/dev/null | head -40; echo \"---FLUTTER PUB---\"; find \"D:/Flutter\" -path \"*caldav*\" -name \"calendar*.dart\" 2>/dev/null | head)"
     ]
   }
 }

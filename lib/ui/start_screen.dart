@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,8 +8,8 @@ import 'app_theme.dart';
 import 'haupt_screen.dart';
 import 'login_screen.dart';
 
-/// Startbildschirm: versucht einmal die automatische Anmeldung mit
-/// gespeicherten Zugangsdaten und leitet dann weiter.
+/// Startbildschirm: zeigt zuerst den lokalen Cache (Sofortstart, auch offline)
+/// und meldet sich dann im Hintergrund an, um frische Daten zu holen.
 class StartScreen extends StatefulWidget {
   const StartScreen({super.key});
 
@@ -23,13 +25,27 @@ class _StartScreenState extends State<StartScreen> {
   }
 
   Future<void> _pruefen() async {
-    final erfolg = await context.read<AppState>().automatischAnmelden();
+    final app = context.read<AppState>();
+    // Lokalen Cache laden (zeigt sofort die letzten Daten) und prüfen,
+    // ob überhaupt ein Konto gespeichert ist.
+    await app.ladeCache();
+    final hatKonto = await app.hatGespeichertesKonto();
     if (!mounted) return;
+
+    if (!hatKonto) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+
+    // Konto vorhanden: direkt in die App (mit Cache). Anmelden und Auffrischen
+    // laufen im Hintergrund – klappt das nicht (offline), bleibt der Cache
+    // sichtbar.
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => erfolg ? const HauptScreen() : const LoginScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const HauptScreen()),
     );
+    unawaited(app.automatischAnmelden());
   }
 
   @override
