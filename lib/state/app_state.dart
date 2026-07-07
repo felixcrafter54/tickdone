@@ -830,6 +830,18 @@ class AppState extends ChangeNotifier {
     if (index >= 0) {
       aufgaben[index] = neue;
     }
+    // Zähler-Cache lokal mitziehen: So passen sich Offen- und Smart-Listen-
+    // Zähler sofort an, ohne erneute Server-Abfrage – z.B. wenn in der
+    // Wichtig-Liste ein Stern entfernt wird, sinkt die Anzahl direkt.
+    for (final eintrag in _cacheProListe.entries) {
+      final i = eintrag.value.indexWhere((a) => a.uid == neue.uid);
+      if (i >= 0) {
+        eintrag.value[i] = neue;
+        _offeneAnzahl[eintrag.key] =
+            eintrag.value.where((a) => !a.istSchritt && !a.erledigt).length;
+        break;
+      }
+    }
   }
 
   /// Verbindung trennen, gespeicherte Zugangsdaten löschen, Zustand leeren.
