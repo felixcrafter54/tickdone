@@ -4,6 +4,7 @@ import 'package:caldav/caldav.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/aufgabe.dart';
+import 'sync_queue.dart';
 
 /// Ein lokal gespeicherter Schnappschuss der zuletzt vom Server geladenen
 /// Daten: die Aufgabenlisten und die Aufgaben je Liste. Damit startet die App
@@ -24,6 +25,7 @@ class Schnappschuss {
 /// App normal weiter (Fehler werden bewusst verschluckt).
 class LokalerSpeicher {
   static const _schluessel = 'tickdone.schnappschuss.v1';
+  static const _queueSchluessel = 'tickdone.syncqueue.v1';
 
   /// Optional injizierte Instanz (für Tests). Sonst wird sie erst bei Bedarf
   /// geholt – so löst der Konstruktor ohne Flutter-Binding keinen Fehler aus.
@@ -56,13 +58,36 @@ class LokalerSpeicher {
     }
   }
 
-  /// Cache leeren (z.B. beim Abmelden).
+  /// Cache UND Sync-Queue leeren (z.B. beim Abmelden).
   Future<void> loeschen() async {
     try {
       final prefs = await _prefs();
       await prefs.remove(_schluessel);
+      await prefs.remove(_queueSchluessel);
     } catch (_) {
       // Ignorieren.
+    }
+  }
+
+  /// Ausstehende Änderungen (Sync-Queue) speichern.
+  Future<void> speichereQueue(SyncQueue queue) async {
+    try {
+      final prefs = await _prefs();
+      await prefs.setString(_queueSchluessel, jsonEncode(queue.zuJson()));
+    } catch (_) {
+      // Queue ist optional persistiert – Fehler ignorieren.
+    }
+  }
+
+  /// Ausstehende Änderungen laden – leere Queue, wenn nichts da/lesbar ist.
+  Future<SyncQueue> ladeQueue() async {
+    try {
+      final prefs = await _prefs();
+      final text = prefs.getString(_queueSchluessel);
+      if (text == null || text.isEmpty) return SyncQueue();
+      return SyncQueue.ausJson(jsonDecode(text) as List<dynamic>);
+    } catch (_) {
+      return SyncQueue();
     }
   }
 
