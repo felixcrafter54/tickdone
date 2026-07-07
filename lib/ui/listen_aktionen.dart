@@ -33,8 +33,13 @@ abstract final class ListenAktionen {
     await context.read<AppState>().dupliziereListe(liste, name);
   }
 
-  /// Liste löschen (mit Bestätigung).
+  /// Liste löschen (mit Bestätigung, außer die Einstellung ist aus).
   static Future<void> loeschen(BuildContext context, Calendar liste) async {
+    final app = context.read<AppState>();
+    if (!app.einstellungen.loeschenBestaetigen) {
+      await app.loescheListe(liste);
+      return;
+    }
     final bestaetigt = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -48,7 +53,7 @@ abstract final class ListenAktionen {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: TickdoneFarben.ueberfaellig),
+                backgroundColor: context.farben.ueberfaellig),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Löschen'),
           ),
@@ -94,7 +99,7 @@ abstract final class ListenAktionen {
         Overlay.of(context).context.findRenderObject() as RenderBox;
     final aktion = await showMenu<void Function()>(
       context: context,
-      color: TickdoneFarben.flaecheHover,
+      color: context.farben.flaecheHover,
       position: RelativeRect.fromRect(
         position & const Size(1, 1),
         Offset.zero & overlay.size,
@@ -151,7 +156,7 @@ class _Zeile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final farbe = rot ? TickdoneFarben.ueberfaellig : TickdoneFarben.text;
+    final farbe = rot ? context.farben.ueberfaellig : context.farben.text;
     return Row(
       children: [
         Icon(icon, size: 18, color: farbe),
@@ -160,8 +165,8 @@ class _Zeile extends StatelessWidget {
         // Tastenkürzel nur auf dem Desktop anzeigen.
         if (kuerzel != null && istDesktop)
           Text(kuerzel!,
-              style: const TextStyle(
-                  color: TickdoneFarben.textGedimmt, fontSize: 12)),
+              style: TextStyle(
+                  color: context.farben.textGedimmt, fontSize: 12)),
       ],
     );
   }

@@ -5,9 +5,9 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgaben_screen.dart';
+import 'einstellungen_screen.dart';
 import 'haupt_screen.dart';
 import 'listen_aktionen.dart';
-import 'login_screen.dart';
 
 /// Übersicht der Aufgabenlisten (Collections mit VTODO) nach der Anmeldung.
 ///
@@ -15,13 +15,6 @@ import 'login_screen.dart';
 /// der Plus-Button legt eine neue Liste an (MKCALENDAR mit VTODO).
 class ListenScreen extends StatelessWidget {
   const ListenScreen({super.key});
-
-  void _abmelden(BuildContext context) {
-    context.read<AppState>().abmelden();
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
-  }
 
   void _oeffneSmart(BuildContext context, Smartliste smart) {
     context.read<AppState>().oeffneSmartliste(smart);
@@ -65,15 +58,18 @@ class ListenScreen extends StatelessWidget {
     final listen = appState.aufgabenlisten;
     return Scaffold(
       // Navigationsbereich ist etwas dunkler (Design-Doc, Abschnitt 1).
-      backgroundColor: TickdoneFarben.sidebar,
+      backgroundColor: context.farben.sidebar,
       appBar: AppBar(
-        backgroundColor: TickdoneFarben.sidebar,
+        backgroundColor: context.farben.sidebar,
         title: const Text('Meine Listen'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Abmelden',
-            onPressed: () => _abmelden(context),
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Einstellungen',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const EinstellungenScreen()),
+            ),
           ),
         ],
       ),
@@ -111,7 +107,7 @@ class ListenScreen extends StatelessWidget {
                         for (final smart in Smartliste.values)
                           ListTile(
                             leading: Icon(smartIcon(smart),
-                                color: TickdoneFarben.akzent),
+                                color: context.farben.akzent),
                             title: Text(smart.anzeige),
                             trailing:
                                 ListenZaehler(appState.smartAnzahl(smart)),

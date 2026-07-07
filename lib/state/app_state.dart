@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/aufgabe.dart';
 import '../services/caldav_service.dart';
+import '../services/einstellungen_speicher.dart';
 import '../services/vtodo_patch.dart';
 import '../services/zugangsspeicher.dart';
 
@@ -49,9 +50,48 @@ enum Smartliste {
 class AppState extends ChangeNotifier {
   final CalDavService _caldav = CalDavService();
   final Zugangsspeicher _speicher;
+  final Einstellungenspeicher _einstellungenSpeicher;
 
-  AppState([Zugangsspeicher? speicher])
-      : _speicher = speicher ?? Zugangsspeicher();
+  AppState([Zugangsspeicher? speicher, Einstellungenspeicher? einstellungen])
+      : _speicher = speicher ?? Zugangsspeicher(),
+        _einstellungenSpeicher = einstellungen ?? Einstellungenspeicher() {
+    unawaited(_ladeEinstellungen());
+  }
+
+  // ---- Einstellungen ----
+
+  Einstellungen einstellungen = const Einstellungen();
+
+  Future<void> _ladeEinstellungen() async {
+    try {
+      einstellungen = await _einstellungenSpeicher.laden();
+      notifyListeners();
+    } catch (_) {
+      // Kein Speicher verfügbar (z.B. Test) – bei Standardwerten bleiben.
+    }
+  }
+
+  Future<void> _speichereEinstellungen(Einstellungen neu) async {
+    einstellungen = neu;
+    notifyListeners();
+    await _einstellungenSpeicher.speichern(neu);
+  }
+
+  Future<void> setzeTheme(ThemeWahl theme) =>
+      _speichereEinstellungen(einstellungen.copyWith(theme: theme));
+
+  Future<void> setzeNeueAufgabeOben(bool oben) =>
+      _speichereEinstellungen(einstellungen.copyWith(neueAufgabeOben: oben));
+
+  Future<void> setzeWichtigeOben(bool oben) {
+    final neu = _speichereEinstellungen(
+        einstellungen.copyWith(wichtigeOben: oben));
+    notifyListeners(); // Sortierung neu anwenden
+    return neu;
+  }
+
+  Future<void> setzeLoeschenBestaetigen(bool an) => _speichereEinstellungen(
+      einstellungen.copyWith(loeschenBestaetigen: an));
 
   bool laedt = false;
   String? fehlermeldung;
@@ -356,7 +396,16 @@ class AppState extends ChangeNotifier {
         AufgabenFilter.wichtig => a.wichtig,
       };
     }).toList();
-    gefiltert.sort(_vergleicher(sortierung));
+    final vergleicher = _vergleicher(sortierung);
+    if (einstellungen.wichtigeOben) {
+      // Wichtige Aufgaben immer zuerst, dann die gewählte Sortierung.
+      gefiltert.sort((a, b) {
+        if (a.wichtig != b.wichtig) return a.wichtig ? -1 : 1;
+        return vergleicher(a, b);
+      });
+    } else {
+      gefiltert.sort(vergleicher);
+    }
     return gefiltert;
   }
 
@@ -549,8 +598,11 @@ class AppState extends ChangeNotifier {
     final uid = neueUid();
     // Neue Hauptaufgaben nach ganz oben (kleinste Sortierung); Schritte
     // ohne Sortierung, damit sie unten angehängt werden.
-    final int? sortOrder =
-        parentUid == null ? _naechsterSortWertOben() : null;
+    final int? sortOrder = parentUid == null
+        ? (einstellungen.neueAufgabeOben
+            ? _naechsterSortWertOben()
+            : _naechsterSortWertUnten())
+        : null;
     final ical = neuesVTodoIcal(
       uid: uid,
       titel: bereinigt,
@@ -585,6 +637,16 @@ class AppState extends ChangeNotifier {
         .map((a) => a.sortOrder!);
     final minWert = werte.isEmpty ? 1024 : werte.reduce((a, b) => a < b ? a : b);
     return minWert - 1024;
+  }
+
+  /// Sortierwert, der eine neue Hauptaufgabe ans Ende stellt:
+  /// 1024 über das aktuelle Maximum (größer = weiter unten).
+  int _naechsterSortWertUnten() {
+    final werte = aufgaben
+        .where((a) => !a.istSchritt && a.sortOrder != null)
+        .map((a) => a.sortOrder!);
+    final maxWert = werte.isEmpty ? 1024 : werte.reduce((a, b) => a > b ? a : b);
+    return maxWert + 1024;
   }
 
   /// Schritt zur eigenständigen Aufgabe höherstufen

@@ -2,6 +2,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:tickdone/models/aufgabe.dart';
+import 'package:tickdone/services/einstellungen_speicher.dart';
 import 'package:tickdone/state/app_state.dart';
 
 Aufgabe aufgabe(
@@ -113,6 +114,8 @@ void main() {
 
     setUp(() {
       state = AppState();
+      // Basissortierung testen (ohne "Wichtige oben").
+      state.einstellungen = const Einstellungen(wichtigeOben: false);
       state.aufgaben = [
         aufgabe('b-offen',
             sortOrder: 2048,
@@ -176,6 +179,15 @@ void main() {
       state.sortierung = Sortierung.erstellt;
       expect(state.wurzelAufgaben.map((a) => a.uid),
           ['a-erledigt', 'c-favorit', 'b-offen']);
+    });
+
+    test('Wichtige oben stellt wichtige Aufgaben voran', () {
+      state.einstellungen = const Einstellungen(wichtigeOben: true);
+      state.sortierung = Sortierung.titel;
+      // a-erledigt (PRIORITY 1) und c-favorit sind wichtig -> zuerst.
+      final uids = state.wurzelAufgaben.map((a) => a.uid).toList();
+      expect(uids.sublist(0, 2).toSet(), {'a-erledigt', 'c-favorit'});
+      expect(uids.last, 'b-offen');
     });
   });
 }
