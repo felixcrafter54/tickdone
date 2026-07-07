@@ -22,6 +22,8 @@ class TickdoneApp extends StatelessWidget {
       child: Consumer<AppState>(
         builder: (context, app, _) => MaterialApp(
           title: 'Tickdone',
+          // Karten bleiben am Listenrand formstabil (kein Stretch).
+          scrollBehavior: const TickdoneScrollBehavior(),
           // Helles + dunkles Theme, Auswahl per Einstellung.
           theme: tickdoneThemeHell(),
           darkTheme: tickdoneTheme(),
