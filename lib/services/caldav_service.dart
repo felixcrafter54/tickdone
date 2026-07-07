@@ -250,6 +250,68 @@ class CalDavService {
     return antwort.headers.value('etag');
   }
 
+  /// Schreibt ein fertiges iCalendar an [href] – für die Offline-Sync-Queue,
+  /// die die konkrete Absicht (nicht den Patch) gespeichert hat.
+  ///
+  /// [ifNoneMatch] true = Neuanlage (`If-None-Match: *`). Bei 412 (jemand
+  /// anders hat zwischenzeitlich geschrieben) wird der aktuelle ETag frisch
+  /// geholt und EINMAL überschrieben – für nachgeholte Offline-Änderungen gilt
+  /// bewusst "last write wins".
+  Future<Aufgabe> schreibeRoh(
+    Uri href,
+    String ical, {
+    String? ifMatch,
+    bool ifNoneMatch = false,
+  }) async {
+    try {
+      return await _putRoh(href, ical,
+          ifMatch: ifNoneMatch ? null : ifMatch, ifNoneMatch: ifNoneMatch);
+    } on DioException catch (fehler) {
+      if (fehler.response?.statusCode != 412) rethrow;
+      final frisch = await _holeAufgabe(href);
+      return _putRoh(href, ical, ifMatch: frisch.etag);
+    }
+  }
+
+  Future<Aufgabe> _putRoh(
+    Uri href,
+    String ical, {
+    String? ifMatch,
+    bool ifNoneMatch = false,
+  }) async {
+    final antwort = await client.webdavClient.put(
+      href.toString(),
+      body: ical,
+      ifMatch: ifMatch,
+      ifNoneMatch: ifNoneMatch ? '*' : null,
+    );
+    final neuerEtag = antwort.headers.value('etag');
+    if (neuerEtag == null) {
+      final frisch = await _holeAufgabe(href);
+      final aufgabe =
+          Aufgabe.ausICalendar(frisch.ical, etag: frisch.etag, href: href);
+      if (aufgabe != null) return aufgabe;
+    }
+    return Aufgabe.ausICalendar(ical, etag: neuerEtag, href: href)!;
+  }
+
+  /// Löscht eine Ressource per href + ETag (für die Sync-Queue).
+  /// 404 (schon weg) und 412 (fremde Änderung) gelten als Erfolg – im
+  /// Konfliktfall wird ohne If-Match nachgelöscht.
+  Future<void> loescheHref(Uri href, String? ifMatch) async {
+    try {
+      await client.webdavClient.delete(href.toString(), ifMatch: ifMatch);
+    } on DioException catch (fehler) {
+      final status = fehler.response?.statusCode;
+      if (status == 404) return;
+      if (status == 412) {
+        await client.webdavClient.delete(href.toString());
+        return;
+      }
+      rethrow;
+    }
+  }
+
   /// PUT einer Aufgabe; liefert das Model zum neuen Serverstand.
   Future<Aufgabe> _putAufgabe(Uri href, String ical, String? etag) async {
     final antwort = await client.webdavClient.put(
