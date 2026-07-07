@@ -1,0 +1,19 @@
+# Hält den Docker-Build-Kontext klein (für deploy/web/Dockerfile).
+# Alles hier wird NICHT ins Image kopiert – Flutter-Web-Build braucht es nicht.
+.git
+.github
+# build/ ausschließen – AUSSER dem fertigen Web-Output, den der Dockerfile
+# kopiert.
+build/*
+!build/web
+.dart_tool/
+.idea/
+.vscode/
+android/
+ios/
+linux/
+macos/
+windows/
+test/
+*.iml
+*.log
