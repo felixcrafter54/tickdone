@@ -86,6 +86,12 @@ jobs:
   web-image:
     name: Web-Image (GHCR)
     runs-on: ubuntu-latest
+    # Verhindert, dass sich mehrere Image-Builds desselben Branches überholen
+    # (bei schnellen Merges): ein neuer Lauf cancelt den alten -> beim
+    # :latest-Tag gewinnt deterministisch der neueste Stand.
+    concurrency:
+      group: web-image-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: read
       packages: write
