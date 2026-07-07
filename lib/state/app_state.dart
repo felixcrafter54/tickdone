@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:caldav/caldav.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/aufgabe.dart';
 import '../services/caldav_service.dart';
 import '../services/einstellungen_speicher.dart';
 import '../services/lokaler_speicher.dart';
+import '../services/sync_queue.dart';
 import '../services/vtodo_patch.dart';
 import '../services/zugangsspeicher.dart';
 
@@ -49,7 +51,7 @@ enum Smartliste {
 /// Widget-Hierarchie bereitstellt. Mehr Struktur (z.B. mehrere Notifier)
 /// erst, wenn die App wirklich danach verlangt.
 class AppState extends ChangeNotifier {
-  final CalDavService _caldav = CalDavService();
+  final CalDavService _caldav;
   final Zugangsspeicher _speicher;
   final Einstellungenspeicher _einstellungenSpeicher;
   final LokalerSpeicher _cache;
@@ -58,10 +60,84 @@ class AppState extends ChangeNotifier {
     Zugangsspeicher? speicher,
     Einstellungenspeicher? einstellungen,
     LokalerSpeicher? cache,
+    CalDavService? caldav,
   ])  : _speicher = speicher ?? Zugangsspeicher(),
         _einstellungenSpeicher = einstellungen ?? Einstellungenspeicher(),
-        _cache = cache ?? LokalerSpeicher() {
+        _cache = cache ?? LokalerSpeicher(),
+        _caldav = caldav ?? CalDavService() {
     unawaited(_ladeEinstellungen());
+  }
+
+  // ---- Offline: ausstehende Änderungen (Sync-Queue) ----
+
+  /// Änderungen, die (noch) nicht zum Server geschrieben werden konnten.
+  /// Wird beim Start aus dem Cache geladen und online abgearbeitet.
+  SyncQueue _queue = SyncQueue();
+  bool _syncLaeuft = false;
+
+  /// Anzahl ausstehender Offline-Änderungen (für die Sync-Anzeige).
+  int get ausstehendeAnzahl => _queue.anzahl;
+
+  /// Ausstehende Änderungen jetzt zum Server schreiben (z.B. per Retry-Button
+  /// oder wenn die Verbindung zurück ist).
+  Future<void> synchronisiereJetzt() => _synchronisiere();
+
+  /// Ob eine Änderung ein Verbindungsproblem ist (dann offline vormerken)
+  /// oder eine echte Server-Ablehnung (dann Fehler zeigen).
+  bool _istNetzwerkfehler(Object fehler) {
+    if (fehler is DioException) return fehler.response == null;
+    if (fehler is StateError) return true; // z.B. "Nicht verbunden"
+    return false;
+  }
+
+  /// Änderung vormerken und persistieren, dann neu zeichnen (für die Anzeige).
+  Future<void> _merkeVor(void Function() aenderung) async {
+    aenderung();
+    await _cache.speichereQueue(_queue);
+    notifyListeners();
+  }
+
+  /// Ausstehende Änderungen der Reihe nach zum Server schreiben. Läuft nur
+  /// einmal gleichzeitig; bricht bei Verbindungsproblemen ab (Rest bleibt für
+  /// später). Dauerhafte Fehler verwerfen den Eintrag, damit er nicht blockiert.
+  Future<void> _synchronisiere() async {
+    if (_syncLaeuft || !istVerbunden || _queue.istLeer) return;
+    _syncLaeuft = true;
+    _speichernBegonnen();
+    try {
+      for (final aenderung in _queue.ausstehend) {
+        try {
+          await _verarbeiteAenderung(aenderung);
+          _queue.entferne(aenderung.uid);
+          await _cache.speichereQueue(_queue);
+          notifyListeners();
+        } catch (fehler) {
+          if (_istNetzwerkfehler(fehler)) break;
+          aufgabenFehler =
+              'Synchronisieren fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+          _queue.entferne(aenderung.uid);
+          await _cache.speichereQueue(_queue);
+        }
+      }
+    } finally {
+      _syncLaeuft = false;
+      _speichernBeendet();
+    }
+  }
+
+  Future<void> _verarbeiteAenderung(AusstehendeAenderung aenderung) async {
+    final href = Uri.parse(aenderung.href);
+    if (aenderung.art == AenderungsArt.loeschen) {
+      await _caldav.loescheHref(href, aenderung.ifMatch);
+      return;
+    }
+    final gespeichert = await _caldav.schreibeRoh(
+      href,
+      aenderung.ical!,
+      ifMatch: aenderung.ifMatch,
+      ifNoneMatch: aenderung.neu,
+    );
+    _ersetzeAufgabe(gespeichert);
   }
 
   // ---- Einstellungen ----
@@ -248,6 +324,8 @@ class AppState extends ChangeNotifier {
   /// erscheinen. Ohne Cache (oder wenn schon Serverdaten da sind) passiert
   /// nichts.
   Future<void> ladeCache() async {
+    // Ausstehende Offline-Änderungen wiederherstellen (auch ohne Cache).
+    _queue = await _cache.ladeQueue();
     if (aufgabenlisten.isNotEmpty) return;
     final schnappschuss = await _cache.laden();
     if (schnappschuss == null || schnappschuss.listen.isEmpty) return;
@@ -535,6 +613,10 @@ class AppState extends ChangeNotifier {
   /// Aufgaben der aktuellen Ansicht (neu) vom Server holen.
   Future<void> aufgabenNeuLaden() async {
     if (!istVerbunden) return;
+    // Erst den Offline-Rückstand hochschreiben, damit der frische Serverstand
+    // die eigenen Änderungen bereits enthält (sonst käme z.B. eine offline
+    // gelöschte Aufgabe kurz zurück).
+    await _synchronisiere();
     // Smart-Liste: alle Listen frisch laden und Anzeige neu aufbauen.
     if (aktiveSmartliste != null) {
       aufgabenLaden = true;
@@ -720,6 +802,16 @@ class AppState extends ChangeNotifier {
       if (index >= 0) aufgaben[index] = aufgaben[index].kopieMit(etag: etag);
       return true;
     } catch (fehler) {
+      if (_istNetzwerkfehler(fehler)) {
+        // Offline: Aufgabe lokal behalten und Neuanlage vormerken.
+        await _merkeVor(() => _queue.merkePut(
+              uid: uid,
+              href: href.toString(),
+              ical: ical,
+              neu: true,
+            ));
+        return true;
+      }
       aufgaben.removeWhere((a) => a.uid == uid);
       aufgabenFehler = 'Anlegen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
       return false;
@@ -826,6 +918,19 @@ class AppState extends ChangeNotifier {
       await aufgabenNeuLaden();
       return true;
     } catch (fehler) {
+      if (_istNetzwerkfehler(fehler)) {
+        // Offline: lokal entfernt lassen und Löschungen vormerken.
+        await _merkeVor(() {
+          for (final einzelne in zuLoeschen) {
+            _queue.merkeLoeschen(
+              uid: einzelne.uid,
+              href: einzelne.href?.toString() ?? '',
+              ifMatch: einzelne.etag,
+            );
+          }
+        });
+        return true;
+      }
       aufgabenFehler = 'Löschen fehlgeschlagen: ${_lesbareMeldung(fehler)}';
       // Anzeige wieder mit dem Server abgleichen.
       await aufgabenNeuLaden();
@@ -862,13 +967,30 @@ class AppState extends ChangeNotifier {
       // ETag und Roh-iCalendar bereits geändert haben.
       final aktuelle = aufgabeMitUid(uid);
       if (aktuelle == null) return;
+      // Neues iCal aus dem aktuellen lokalen Stand berechnen und lokal
+      // übernehmen – so stimmen Cache/Queue und Folgeänderungen bauen darauf
+      // auf (SEQUENCE zählt dabei monoton hoch).
+      final neuesIcal = patch(aktuelle.rohIcal);
+      _ersetzeAufgabe(aktuelle.kopieMit(rohIcal: neuesIcal));
       try {
         final gespeichert = await _caldav.speichereAenderung(aktuelle, patch);
         _ersetzeAufgabe(gespeichert);
+        // Erfolgreich = online: evtl. aufgestaute Änderungen nachziehen.
+        unawaited(_synchronisiere());
       } catch (fehler) {
-        aufgabenFehler =
-            'Speichern fehlgeschlagen: ${_lesbareMeldung(fehler)}';
-        await aufgabenNeuLaden();
+        if (_istNetzwerkfehler(fehler)) {
+          // Offline: Änderung für später vormerken (verlustfrei).
+          await _merkeVor(() => _queue.merkePut(
+                uid: uid,
+                href: aktuelle.href.toString(),
+                ical: neuesIcal,
+                ifMatch: aktuelle.etag,
+              ));
+        } else {
+          aufgabenFehler =
+              'Speichern fehlgeschlagen: ${_lesbareMeldung(fehler)}';
+          await aufgabenNeuLaden();
+        }
       }
     }).whenComplete(_speichernBeendet);
     _speicherKette[uid] = eigener;
@@ -906,6 +1028,7 @@ class AppState extends ChangeNotifier {
     aufgaben = [];
     _cacheProListe.clear();
     _offeneAnzahl.clear();
+    _queue = SyncQueue();
     aufgabenFehler = null;
     fehlermeldung = null;
     await _cache.loeschen();
