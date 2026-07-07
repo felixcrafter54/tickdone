@@ -565,13 +565,6 @@ class AppState extends ChangeNotifier {
         patch: faelligPatch(datum),
       );
 
-  /// Manuelle Reihenfolge einer einzelnen Aufgabe setzen (optimistisch).
-  Future<void> setzeSortOrder(String uid, int wert) => _aendereUndSpeichere(
-        uid,
-        lokal: (a) => a.kopieMit(sortOrder: wert),
-        patch: sortOrderPatch(wert),
-      );
-
   /// Aufgabe per Drag & Drop umsortieren (nur in Sortierung "Manuell").
   /// [neuIndex] ist bereits um das entfernte Element angepasst
   /// (ReorderableListView.onReorderItem). Vergibt neue
@@ -592,12 +585,25 @@ class AppState extends ChangeNotifier {
     if (ziel == altIndex) return;
     final bewegt = liste.removeAt(altIndex);
     liste.insert(ziel, bewegt);
+    // Erst ALLE neuen Reihenfolge-Werte lokal setzen und nur EINMAL neu
+    // zeichnen: So steht die Liste sofort komplett in der neuen Reihenfolge,
+    // statt dass die Karten sichtbar nacheinander an ihren Platz springen.
+    final zuSpeichern = <String, int>{};
     for (var i = 0; i < liste.length; i++) {
       final wert = (i + 1) * 1024;
       if (liste[i].sortOrder != wert) {
-        await setzeSortOrder(liste[i].uid, wert);
+        _ersetzeAufgabe(liste[i].kopieMit(sortOrder: wert));
+        zuSpeichern[liste[i].uid] = wert;
       }
     }
+    if (zuSpeichern.isEmpty) return;
+    notifyListeners();
+    // Danach im Hintergrund speichern (parallel je UID, keine sichtbaren
+    // Einzelschritte mehr).
+    await Future.wait([
+      for (final eintrag in zuSpeichern.entries)
+        _speichereNur(eintrag.key, sortOrderPatch(eintrag.value)),
+    ]);
   }
 
   /// "Wichtig" (Stern) setzen/entfernen – gespeichert als PRIORITY 1.
@@ -783,7 +789,14 @@ class AppState extends ChangeNotifier {
 
     _ersetzeAufgabe(lokal(aufgabe));
     notifyListeners();
+    return _speichereNur(uid, patch);
+  }
 
+  /// Reiht nur das Speichern eines Patches in die Kette der UID ein – ohne
+  /// lokale Änderung und ohne notifyListeners. Der lokale Stand muss also
+  /// bereits gesetzt sein (z.B. beim Umsortieren, wo alle Werte auf einmal
+  /// lokal geändert und nur einmal gezeichnet werden).
+  Future<void> _speichereNur(String uid, IcalPatch patch) {
     _speichernBegonnen();
     final vorgaenger = _speicherKette[uid] ?? Future.value();
     final eigener = vorgaenger.then((_) async {
