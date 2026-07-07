@@ -405,6 +405,9 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
           // (das Anlegen dort wäre nicht eindeutig einer Liste zuzuordnen).
           if (appState.aktiveSmartliste == null)
             NeueAufgabeZeile(focusNode: widget.neueAufgabeFokus),
+          // Hinweis auf offline gesammelte, noch nicht gespeicherte Änderungen.
+          if (appState.ausstehendeAnzahl > 0)
+            _AusstehendHinweis(anzahl: appState.ausstehendeAnzahl),
           // Dünne Anzeige oben, während im Hintergrund gesynct wird.
           if (appState.aufgabenLaden || appState.speichertGerade)
             const LinearProgressIndicator(minHeight: 2),
@@ -494,6 +497,44 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       itemCount: aufgaben.length,
       itemBuilder: (context, index) =>
           _zeile(context, appState, aufgaben[index], index),
+    );
+  }
+}
+
+/// Dezenter Hinweis, dass Offline-Änderungen auf die Synchronisierung warten,
+/// mit Button zum sofortigen erneuten Versuch.
+class _AusstehendHinweis extends StatelessWidget {
+  const _AusstehendHinweis({required this.anzahl});
+
+  final int anzahl;
+
+  @override
+  Widget build(BuildContext context) {
+    final farben = context.farben;
+    return Material(
+      color: farben.flaecheGewaehlt,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+        child: Row(
+          children: [
+            Icon(Icons.cloud_off, size: 18, color: farben.textGedimmt),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                anzahl == 1
+                    ? '1 Änderung wartet auf Synchronisierung'
+                    : '$anzahl Änderungen warten auf Synchronisierung',
+                style: TextStyle(color: farben.textGedimmt, fontSize: 13),
+              ),
+            ),
+            TextButton(
+              onPressed: () =>
+                  context.read<AppState>().synchronisiereJetzt(),
+              child: const Text('Jetzt syncen'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
