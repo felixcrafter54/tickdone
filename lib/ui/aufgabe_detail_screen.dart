@@ -123,9 +123,9 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     final aufgabe = appState.aufgabeMitUid(widget.uid);
     if (aufgabe == null) {
       return Scaffold(
-        backgroundColor: TickdoneFarben.detailFlaeche,
+        backgroundColor: context.farben.detailFlaeche,
         appBar: AppBar(
-          backgroundColor: TickdoneFarben.detailFlaeche,
+          backgroundColor: context.farben.detailFlaeche,
           automaticallyImplyLeading: !widget.eingebettet,
           actions: [
             if (widget.eingebettet)
@@ -145,9 +145,9 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     final schritte = appState.schritteVon(widget.uid);
 
     return Scaffold(
-      backgroundColor: TickdoneFarben.detailFlaeche,
+      backgroundColor: context.farben.detailFlaeche,
       appBar: AppBar(
-        backgroundColor: TickdoneFarben.detailFlaeche,
+        backgroundColor: context.farben.detailFlaeche,
         // Kein Listenname mehr (MS-To-Do-Stil).
         automaticallyImplyLeading: !widget.eingebettet,
         actions: [
@@ -182,9 +182,9 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                 ),
                 const SizedBox(height: 20),
                 _meinTagZeile(aufgabe),
-                const Divider(height: 1, color: TickdoneFarben.rahmen),
+                Divider(height: 1, color: context.farben.rahmen),
                 _faelligZeile(aufgabe),
-                const Divider(height: 1, color: TickdoneFarben.rahmen),
+                Divider(height: 1, color: context.farben.rahmen),
                 const SizedBox(height: 12),
                 _notizFeld(),
               ],
@@ -210,8 +210,8 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                 ? Icons.check_circle
                 : Icons.radio_button_unchecked,
             color: aufgabe.erledigt
-                ? TickdoneFarben.erledigt
-                : TickdoneFarben.textGedimmt,
+                ? context.farben.erledigt
+                : context.farben.textGedimmt,
             size: 26,
           ),
           tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
@@ -230,8 +230,8 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
               decoration:
                   aufgabe.erledigt ? TextDecoration.lineThrough : null,
               color: aufgabe.erledigt
-                  ? TickdoneFarben.textSchwach
-                  : TickdoneFarben.text,
+                  ? context.farben.textSchwach
+                  : context.farben.text,
             ),
             decoration: randloseDeko('Titel'),
             onSubmitted: (wert) =>
@@ -240,9 +240,8 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
         ),
         IconButton(
           icon: aufgabe.wichtig
-              ? const Icon(Icons.star, color: TickdoneFarben.favorit)
-              : const Icon(Icons.star_border,
-                  color: TickdoneFarben.textGedimmt),
+              ? Icon(Icons.star, color: context.farben.favorit)
+              : Icon(Icons.star_border, color: context.farben.textGedimmt),
           tooltip:
               aufgabe.wichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
           onPressed: () =>
@@ -256,11 +255,11 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     final aktiv = aufgabe.meinTag;
     return ListTile(
       leading: Icon(Icons.wb_sunny_outlined,
-          color: aktiv ? TickdoneFarben.akzent : TickdoneFarben.textGedimmt),
+          color: aktiv ? context.farben.akzent : context.farben.textGedimmt),
       title: Text(
         aktiv ? 'Zu "Mein Tag" hinzugefügt' : 'Zu "Mein Tag" hinzufügen',
         style: TextStyle(
-            color: aktiv ? TickdoneFarben.akzent : TickdoneFarben.text),
+            color: aktiv ? context.farben.akzent : context.farben.text),
       ),
       trailing: aktiv
           ? IconButton(
@@ -280,12 +279,12 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
     final hat = aufgabe.faellig != null;
     return ListTile(
       leading: Icon(Icons.calendar_today_outlined,
-          color: hat ? TickdoneFarben.akzent : TickdoneFarben.textGedimmt),
+          color: hat ? context.farben.akzent : context.farben.textGedimmt),
       title: Text(
         hat ? 'Fällig: ${faelligText(aufgabe.faellig!)}'
             : 'Fälligkeitsdatum hinzufügen',
         style: TextStyle(
-            color: hat ? TickdoneFarben.akzent : TickdoneFarben.text),
+            color: hat ? context.farben.akzent : context.farben.text),
       ),
       trailing: hat
           ? IconButton(
@@ -320,13 +319,13 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
             aufgabe.erstellt == null
                 ? ''
                 : 'Erstellt ${relativeZeit(aufgabe.erstellt!)}',
-            style: const TextStyle(
-                color: TickdoneFarben.textGedimmt, fontSize: 12),
+            style: TextStyle(
+                color: context.farben.textGedimmt, fontSize: 12),
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.delete_outline,
-              color: TickdoneFarben.ueberfaellig),
+          icon: Icon(Icons.delete_outline,
+              color: context.farben.ueberfaellig),
           tooltip: 'Aufgabe löschen',
           onPressed: () async {
             final geloescht =
@@ -406,8 +405,8 @@ class _SchrittZeileState extends State<_SchrittZeile> {
                 ? Icons.check_circle
                 : Icons.radio_button_unchecked,
             color: schritt.erledigt
-                ? TickdoneFarben.erledigt
-                : TickdoneFarben.textGedimmt,
+                ? context.farben.erledigt
+                : context.farben.textGedimmt,
             size: 20,
           ),
           tooltip: schritt.erledigt ? 'Wieder öffnen' : 'Erledigt',
@@ -425,8 +424,8 @@ class _SchrittZeileState extends State<_SchrittZeile> {
               decoration:
                   schritt.erledigt ? TextDecoration.lineThrough : null,
               color: schritt.erledigt
-                  ? TickdoneFarben.textSchwach
-                  : TickdoneFarben.text,
+                  ? context.farben.textSchwach
+                  : context.farben.text,
             ),
             decoration: randloseDeko(),
             onSubmitted: (wert) =>
@@ -434,8 +433,8 @@ class _SchrittZeileState extends State<_SchrittZeile> {
           ),
         ),
         PopupMenuButton<void Function()>(
-          icon: const Icon(Icons.more_vert,
-              size: 18, color: TickdoneFarben.textGedimmt),
+          icon: Icon(Icons.more_vert,
+              size: 18, color: context.farben.textGedimmt),
           tooltip: 'Schritt-Aktionen',
           onSelected: (aktion) => aktion(),
           itemBuilder: (_) => [
@@ -455,14 +454,14 @@ class _SchrittZeileState extends State<_SchrittZeile> {
             PopupMenuItem(
               value: () =>
                   AufgabenScreen.loeschenBestaetigen(context, schritt),
-              child: const Text('Schritt löschen',
-                  style: TextStyle(color: TickdoneFarben.ueberfaellig)),
+              child: Text('Schritt löschen',
+                  style: TextStyle(color: context.farben.ueberfaellig)),
             ),
           ],
         ),
           ],
         ),
-        const Divider(height: 1, color: TickdoneFarben.rahmen),
+        Divider(height: 1, color: context.farben.rahmen),
       ],
     );
   }
@@ -517,7 +516,7 @@ class _NaechsterSchrittState extends State<_NaechsterSchritt> {
         IconButton(
           icon: Icon(
             aktiv ? Icons.radio_button_unchecked : Icons.add,
-            color: TickdoneFarben.textGedimmt,
+            color: context.farben.textGedimmt,
             size: 20,
           ),
           tooltip: 'Schritt hinzufügen',
@@ -529,7 +528,7 @@ class _NaechsterSchrittState extends State<_NaechsterSchritt> {
             focusNode: _fokus,
             maxLines: 1,
             textInputAction: TextInputAction.done,
-            style: const TextStyle(color: TickdoneFarben.text),
+            style: TextStyle(color: context.farben.text),
             decoration: randloseDeko('Nächster Schritt'),
             onSubmitted: (_) => _anlegen(),
           ),

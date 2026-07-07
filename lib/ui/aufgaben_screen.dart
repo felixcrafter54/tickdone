@@ -86,8 +86,12 @@ class AufgabenScreen extends StatefulWidget {
     BuildContext context,
     Aufgabe aufgabe,
   ) async {
-    final schritte =
-        context.read<AppState>().fortschrittVon(aufgabe.uid)?.gesamt ?? 0;
+    final app = context.read<AppState>();
+    // Ohne Bestätigung (Einstellung) direkt löschen.
+    if (!app.einstellungen.loeschenBestaetigen) {
+      return app.loescheAufgabe(aufgabe.uid);
+    }
+    final schritte = app.fortschrittVon(aufgabe.uid)?.gesamt ?? 0;
     final bestaetigt = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -252,6 +256,14 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
   }
 
   Future<void> _auswahlLoeschen() async {
+    final appState = context.read<AppState>();
+    if (!appState.einstellungen.loeschenBestaetigen) {
+      for (final uid in _auswahl.toList()) {
+        await appState.loescheAufgabe(uid);
+      }
+      _auswahlBeenden();
+      return;
+    }
     final anzahl = _auswahl.length;
     final bestaetigt = await showDialog<bool>(
       context: context,
@@ -274,7 +286,6 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       ),
     );
     if (bestaetigt != true || !mounted) return;
-    final appState = context.read<AppState>();
     for (final uid in _auswahl.toList()) {
       await appState.loescheAufgabe(uid);
     }
@@ -421,8 +432,8 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                                     : 'Keine Aufgaben hier. '
                                         'Füge oben eine hinzu.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                color: TickdoneFarben.textGedimmt),
+                            style: TextStyle(
+                                color: context.farben.textGedimmt),
                           ),
                         ),
                       ],
@@ -508,9 +519,9 @@ class _NeueAufgabeZeileState extends State<NeueAufgabeZeile> {
         focusNode: _fokus,
         maxLines: 1,
         textInputAction: TextInputAction.done,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           hintText: 'Aufgabe hinzufügen und Enter drücken …',
-          prefixIcon: Icon(Icons.add, color: TickdoneFarben.akzent),
+          prefixIcon: Icon(Icons.add, color: context.farben.akzent),
           isDense: true,
         ),
         onSubmitted: (_) => _anlegen(),
@@ -555,15 +566,15 @@ class AufgabenZeile extends StatelessWidget {
   Widget build(BuildContext context) {
     final zeile = ListTile(
       selected: ausgewaehlt,
-      tileColor: TickdoneFarben.flaeche,
-      selectedTileColor: TickdoneFarben.flaecheGewaehlt,
-      hoverColor: TickdoneFarben.flaecheHover,
+      tileColor: context.farben.flaeche,
+      selectedTileColor: context.farben.flaecheGewaehlt,
+      hoverColor: context.farben.flaecheHover,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(tickdoneRadius),
         side: BorderSide(
           color: ausgewaehlt
-              ? TickdoneFarben.akzentGedimmt
-              : TickdoneFarben.rahmen,
+              ? context.farben.akzentGedimmt
+              : context.farben.rahmen,
         ),
       ),
       // Im Auswahlmodus: Auswahlkreis (gefüllt = markiert). Sonst:
@@ -575,8 +586,8 @@ class AufgabenZeile extends StatelessWidget {
                     ? Icons.check_circle
                     : Icons.radio_button_unchecked,
                 color: ausgewaehlt
-                    ? TickdoneFarben.akzent
-                    : TickdoneFarben.textGedimmt,
+                    ? context.farben.akzent
+                    : context.farben.textGedimmt,
               ),
               tooltip: ausgewaehlt ? 'Abwählen' : 'Auswählen',
               onPressed: onTap,
@@ -587,8 +598,8 @@ class AufgabenZeile extends StatelessWidget {
                     ? Icons.check_circle
                     : Icons.radio_button_unchecked,
                 color: aufgabe.erledigt
-                    ? TickdoneFarben.erledigt
-                    : TickdoneFarben.textGedimmt,
+                    ? context.farben.erledigt
+                    : context.farben.textGedimmt,
               ),
               tooltip: aufgabe.erledigt ? 'Wieder öffnen' : 'Erledigt',
               onPressed: () => context
@@ -598,19 +609,18 @@ class AufgabenZeile extends StatelessWidget {
       title: Text(
         aufgabe.titel,
         style: aufgabe.erledigt
-            ? const TextStyle(
+            ? TextStyle(
                 decoration: TextDecoration.lineThrough,
-                color: TickdoneFarben.textSchwach,
+                color: context.farben.textSchwach,
               )
-            : const TextStyle(color: TickdoneFarben.text),
+            : TextStyle(color: context.farben.text),
       ),
-      subtitle: _untertitel(),
+      subtitle: _untertitel(context),
       // Stern = als wichtig markieren (hohe Priorität).
       trailing: IconButton(
         icon: aufgabe.wichtig
-            ? const Icon(Icons.star, color: TickdoneFarben.favorit)
-            : const Icon(Icons.star_border,
-                color: TickdoneFarben.textGedimmt),
+            ? Icon(Icons.star, color: context.farben.favorit)
+            : Icon(Icons.star_border, color: context.farben.textGedimmt),
         tooltip:
             aufgabe.wichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
         onPressed: () => context
@@ -636,7 +646,7 @@ class AufgabenZeile extends StatelessWidget {
   }
 
   /// Meta-Zeile: Mein Tag · Fälligkeit (rot wenn überfällig) · x von y · Notiz.
-  Widget? _untertitel() {
+  Widget? _untertitel(BuildContext context) {
     final teile = <(String, bool)>[]; // (Text, überfällig-rot)
     if (aufgabe.meinTag) teile.add(('Mein Tag', false));
     if (aufgabe.faellig != null) {
@@ -654,14 +664,13 @@ class AufgabenZeile extends StatelessWidget {
       spans.add(TextSpan(
         text: teile[i].$1,
         style: teile[i].$2
-            ? const TextStyle(color: TickdoneFarben.ueberfaellig)
+            ? TextStyle(color: context.farben.ueberfaellig)
             : null,
       ));
     }
     return Text.rich(
       TextSpan(
-        style: const TextStyle(
-            color: TickdoneFarben.textGedimmt, fontSize: 12),
+        style: TextStyle(color: context.farben.textGedimmt, fontSize: 12),
         children: spans,
       ),
     );
@@ -693,20 +702,21 @@ class AufgabeKontextMenu extends StatelessWidget {
   final Widget child;
 
   /// Menüeintrag mit Icon, Text und optional Kürzel (nur Desktop).
-  Widget _eintrag({
+  Widget _eintrag(
+    BuildContext context, {
     required IconData icon,
     required String text,
     required VoidCallback onPressed,
     String? kuerzel,
     bool rot = false,
   }) {
-    final farbe = rot ? TickdoneFarben.ueberfaellig : TickdoneFarben.text;
+    final farbe = rot ? context.farben.ueberfaellig : context.farben.text;
     return MenuItemButton(
       leadingIcon: Icon(icon, size: 18, color: farbe),
       trailingIcon: (kuerzel != null && istDesktop)
           ? Text(kuerzel,
-              style: const TextStyle(
-                  color: TickdoneFarben.textGedimmt, fontSize: 12))
+              style: TextStyle(
+                  color: context.farben.textGedimmt, fontSize: 12))
           : null,
       onPressed: onPressed,
       child: Text(text, style: TextStyle(color: farbe)),
@@ -716,6 +726,12 @@ class AufgabeKontextMenu extends StatelessWidget {
   Future<void> _loeschen(BuildContext context, AppState app) async {
     if (ziele.length == 1) {
       await AufgabenScreen.loeschenBestaetigen(context, ziele.first);
+      return;
+    }
+    if (!app.einstellungen.loeschenBestaetigen) {
+      for (final a in ziele) {
+        await app.loescheAufgabe(a.uid);
+      }
       return;
     }
     final bestaetigt = await showDialog<bool>(
@@ -730,7 +746,7 @@ class AufgabeKontextMenu extends StatelessWidget {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: TickdoneFarben.ueberfaellig),
+                backgroundColor: context.farben.ueberfaellig),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Löschen'),
           ),
@@ -762,6 +778,7 @@ class AufgabeKontextMenu extends StatelessWidget {
     return MenuAnchor(
       menuChildren: [
         _eintrag(
+          context,
           icon: Icons.wb_sunny_outlined,
           text: alleMeinTag
               ? 'Aus "Mein Tag" entfernen'
@@ -774,6 +791,7 @@ class AufgabeKontextMenu extends StatelessWidget {
           },
         ),
         _eintrag(
+          context,
           icon: alleWichtig ? Icons.star : Icons.star_border,
           text: alleWichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
           onPressed: () {
@@ -783,6 +801,7 @@ class AufgabeKontextMenu extends StatelessWidget {
           },
         ),
         _eintrag(
+          context,
           icon: alleErledigt
               ? Icons.radio_button_unchecked
               : Icons.check_circle_outline,
@@ -796,6 +815,7 @@ class AufgabeKontextMenu extends StatelessWidget {
         ),
         const Divider(height: 1),
         _eintrag(
+          context,
           icon: Icons.today,
           text: 'Heute fällig',
           onPressed: () {
@@ -806,6 +826,7 @@ class AufgabeKontextMenu extends StatelessWidget {
           },
         ),
         _eintrag(
+          context,
           icon: Icons.event,
           text: 'Morgen fällig',
           onPressed: () {
@@ -816,6 +837,7 @@ class AufgabeKontextMenu extends StatelessWidget {
           },
         ),
         _eintrag(
+          context,
           icon: Icons.event_busy,
           text: 'Termin entfernen',
           onPressed: () {
@@ -827,11 +849,12 @@ class AufgabeKontextMenu extends StatelessWidget {
         if (verschiebbar) const Divider(height: 1),
         if (verschiebbar)
           SubmenuButton(
-            leadingIcon: const Icon(Icons.drive_file_move_outline,
-                size: 18, color: TickdoneFarben.text),
+            leadingIcon: Icon(Icons.drive_file_move_outline,
+                size: 18, color: context.farben.text),
             menuChildren: [
               for (final liste in andereListen)
                 _eintrag(
+          context,
                   icon: Icons.checklist,
                   text: liste.displayName,
                   onPressed: () {
@@ -843,10 +866,11 @@ class AufgabeKontextMenu extends StatelessWidget {
             ],
             child: Text(
                 mehr ? 'Aufgaben verschieben in …' : 'Aufgabe verschieben in …',
-                style: const TextStyle(color: TickdoneFarben.text)),
+                style: TextStyle(color: context.farben.text)),
           ),
         const Divider(height: 1),
         _eintrag(
+          context,
           icon: Icons.delete_outline,
           text: mehr ? 'Aufgaben löschen' : 'Aufgabe löschen',
           kuerzel: 'Entf',

@@ -7,9 +7,9 @@ import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgabe_detail_screen.dart';
 import 'aufgaben_screen.dart';
+import 'einstellungen_screen.dart';
 import 'listen_aktionen.dart';
 import 'listen_screen.dart';
-import 'login_screen.dart';
 
 /// Responsives Grundgerüst nach TICKDONE_DESIGN.md, Abschnitt 2:
 /// - schmal (Handy): eine Seite, klassische Push-Navigation.
@@ -66,8 +66,7 @@ class ListenZaehler extends StatelessWidget {
     if (anzahl == null || anzahl == 0) return const SizedBox.shrink();
     return Text(
       '$anzahl',
-      style: const TextStyle(
-          color: TickdoneFarben.textGedimmt, fontSize: 13),
+      style: TextStyle(color: context.farben.textGedimmt, fontSize: 13),
     );
   }
 }
@@ -221,10 +220,10 @@ class _DreiSpaltenState extends State<_DreiSpalten> {
                 const VerticalDivider(width: 1),
                 Expanded(
                   child: !app.hatAnsicht
-                      ? const Center(
+                      ? Center(
                           child: Text('Wähle links eine Liste.',
                               style: TextStyle(
-                                  color: TickdoneFarben.textGedimmt)),
+                                  color: context.farben.textGedimmt)),
                         )
                       : AufgabenScreen(
                           // Neuaufbau bei Ansichtswechsel (frische Auswahl).
@@ -296,7 +295,7 @@ class _ListenSpalte extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     return Container(
-      color: TickdoneFarben.sidebar,
+      color: context.farben.sidebar,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -310,14 +309,12 @@ class _ListenSpalte extends StatelessWidget {
                           fontSize: 20, fontWeight: FontWeight.bold)),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.logout, size: 20),
-                  tooltip: 'Abmelden',
-                  onPressed: () {
-                    context.read<AppState>().abmelden();
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    );
-                  },
+                  icon: const Icon(Icons.settings_outlined, size: 20),
+                  tooltip: 'Einstellungen',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const EinstellungenScreen()),
+                  ),
                 ),
               ],
             ),
@@ -327,18 +324,18 @@ class _ListenSpalte extends StatelessWidget {
             ListTile(
               dense: true,
               selected: app.aktiveSmartliste == smart,
-              selectedTileColor: TickdoneFarben.flaecheGewaehlt,
-              leading: Icon(smartIcon(smart), color: TickdoneFarben.akzent),
+              selectedTileColor: context.farben.flaecheGewaehlt,
+              leading: Icon(smartIcon(smart), color: context.farben.akzent),
               title: Text(smart.anzeige),
               trailing: ListenZaehler(app.smartAnzahl(smart)),
               onTap: () => context.read<AppState>().oeffneSmartliste(smart),
             ),
           const Divider(height: 1),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Text('LISTEN',
                 style: TextStyle(
-                    color: TickdoneFarben.textSchwach,
+                    color: context.farben.textSchwach,
                     fontSize: 12,
                     letterSpacing: 1)),
           ),
@@ -359,10 +356,10 @@ class _ListenSpalte extends StatelessWidget {
                       child: ListTile(
                         dense: true,
                         selected: app.aktiveListe?.uid == liste.uid,
-                        selectedTileColor: TickdoneFarben.flaecheGewaehlt,
+                        selectedTileColor: context.farben.flaecheGewaehlt,
                         leading: Icon(Icons.checklist,
                             color:
-                                listenFarbe(liste) ?? TickdoneFarben.akzent),
+                                listenFarbe(liste) ?? context.farben.akzent),
                         title: Text(liste.displayName,
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         // Anzahl offener Aufgaben (leer bei 0/unbekannt).

@@ -34,14 +34,14 @@ class _StartScreenState extends State<StartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.task_alt, size: 64, color: TickdoneFarben.akzent),
-            SizedBox(height: 24),
-            CircularProgressIndicator(),
+            Icon(Icons.task_alt, size: 64, color: context.farben.akzent),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
           ],
         ),
       ),
