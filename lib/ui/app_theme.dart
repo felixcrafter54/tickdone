@@ -153,6 +153,26 @@ extension TickdoneFarbenContext on BuildContext {
 /// Eckenradius für Karten/Zeilen/Eingaben (Design-Doc, Abschnitt 1).
 const tickdoneRadius = 10.0;
 
+/// Scroll-Verhalten ohne das Material-„Stretch" am Rand – so bleiben die
+/// abgerundeten Karten formstabil an Ort und Stelle. Stattdessen ein
+/// dezenter Schimmer (Glow) in der Akzentfarbe.
+class TickdoneScrollBehavior extends MaterialScrollBehavior {
+  const TickdoneScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return GlowingOverscrollIndicator(
+      axisDirection: details.direction,
+      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.25),
+      child: child,
+    );
+  }
+}
+
 /// Dunkles Theme (Standard).
 ThemeData tickdoneTheme() => _theme(TickdoneFarben.dunkel, Brightness.dark);
 
