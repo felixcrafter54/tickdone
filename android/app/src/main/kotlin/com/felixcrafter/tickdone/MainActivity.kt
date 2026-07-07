@@ -1,4 +1,4 @@
-package com.example.tickdone
+package com.felixcrafter.tickdone
 
 import io.flutter.embedding.android.FlutterActivity
 

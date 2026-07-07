@@ -52,6 +52,24 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+# App-Icon: Quellbild unter assets/icon/tickdone.png (quadratisch, ideal
+# 1024x1024) ablegen, dann einmal generieren lassen:
+#   flutter pub run flutter_launcher_icons
+# Erzeugt die Icons fuer Android, Web und Windows.
+flutter_launcher_icons:
+  image_path: "assets/icon/tickdone.png"
+  android: true
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  web:
+    generate: true
+    background_color: "#111318"
+    theme_color: "#111318"
+  windows:
+    generate: true
+    icon_size: 256
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
