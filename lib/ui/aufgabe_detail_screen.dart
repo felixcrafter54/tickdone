@@ -172,8 +172,24 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               children: [
-                for (final schritt in schritte)
-                  _SchrittZeile(key: ValueKey(schritt.uid), schritt: schritt),
+                // Schritte als eigener, verschachtelter Reorder-Block
+                // (shrinkWrap, kein eigenes Scrollen) – nur dieser Teil ist
+                // ziehbar, der Rest der Detailansicht bleibt fest.
+                if (schritte.isNotEmpty)
+                  ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    itemCount: schritte.length,
+                    onReorderItem: (alt, neu) => context
+                        .read<AppState>()
+                        .ordneSchritteNeu(widget.uid, alt, neu),
+                    itemBuilder: (context, index) => _SchrittZeile(
+                      key: ValueKey(schritte[index].uid),
+                      schritt: schritte[index],
+                      ziehIndex: index,
+                    ),
+                  ),
                 // Stabiler Key: bleibt fokussiert, wenn oben ein neuer
                 // Schritt optimistisch eingefügt wird (Cursor/Tastatur weg).
                 _NaechsterSchritt(
@@ -353,9 +369,12 @@ InputDecoration randloseDeko([String? hint]) => InputDecoration(
 /// Ein editierbarer Schritt (Subtask): reinklicken und tippen wie beim
 /// Haupttitel; speichert beim Verlassen des Feldes bzw. mit Enter.
 class _SchrittZeile extends StatefulWidget {
-  const _SchrittZeile({super.key, required this.schritt});
+  const _SchrittZeile({super.key, required this.schritt, this.ziehIndex});
 
   final Aufgabe schritt;
+
+  /// Position in der Schrittliste – aktiviert den Ziehgriff zum Umsortieren.
+  final int? ziehIndex;
 
   @override
   State<_SchrittZeile> createState() => _SchrittZeileState();
@@ -459,6 +478,17 @@ class _SchrittZeileState extends State<_SchrittZeile> {
             ),
           ],
         ),
+        // Ziehgriff zum Umsortieren der Schritte (Schritte sind immer
+        // manuell sortiert).
+        if (widget.ziehIndex != null)
+          ReorderableDragStartListener(
+            index: widget.ziehIndex!,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 2, right: 4),
+              child: Icon(Icons.drag_handle,
+                  size: 20, color: context.farben.textGedimmt),
+            ),
+          ),
           ],
         ),
         Divider(height: 1, color: context.farben.rahmen),
