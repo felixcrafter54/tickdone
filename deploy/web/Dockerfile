@@ -9,6 +9,9 @@
 #
 # build/web kann auch auf einem anderen Rechner gebaut und hierher kopiert
 # werden (build/web ist absichtlich nicht in git – reines Artefakt).
+#
+# Die CalDAV-Server-Adresse ist NICHT im Image, sondern kommt zur Laufzeit aus
+# der Umgebungsvariable CALDAV_HOST (nginx-Template via envsubst).
 FROM nginx:alpine
-COPY deploy/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY deploy/web/default.conf.template /etc/nginx/templates/default.conf.template
 COPY build/web /usr/share/nginx/html

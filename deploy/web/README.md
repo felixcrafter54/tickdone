@@ -29,12 +29,20 @@ Das Docker-Image enthält **kein** Flutter – der Web-Build wird vorher erzeugt
 nur in ein schlankes nginx kopiert (kein GB-großes SDK-Image, kein Dart-Versions-
 Ärger, Build in Sekunden). Dasselbe Dockerfile läuft lokal wie in der CI.
 
+Die **CalDAV-Server-Adresse steckt NICHT im Image/Repo**, sondern kommt zur
+Laufzeit aus der Umgebungsvariable **`CALDAV_HOST`** (nur der Host, ohne Schema
+und ohne `/caldav/`). So bleibt sie aus dem public Repo heraus.
+
 ### Weg 1 (empfohlen): fertiges Image aus GHCR ziehen
 Die GitHub-Actions-CI baut bei jedem Push auf `main` das Image und pusht es nach
 `ghcr.io/felixcrafter54/tickdone-web:latest`. Der Server braucht **weder Flutter
-noch den Quellcode** – nur Docker + `docker-compose.yml`:
+noch den Quellcode** – nur Docker + `docker-compose.yml` + eine `.env`:
 
 ```bash
+# einmalig: Server-Adresse setzen (Datei ist per .gitignore ausgeschlossen)
+cp deploy/web/.env.example deploy/web/.env
+#   -> deploy/web/.env editieren: CALDAV_HOST=dein.server.de
+
 docker compose -f deploy/web/docker-compose.yml pull
 docker compose -f deploy/web/docker-compose.yml up -d
 ```
@@ -73,15 +81,20 @@ docker compose -f deploy/web/docker-compose.yml up --build
 - **href-Auflösung:** Der Proxy-Pfad ist bewusst `/caldav/` (identisch zum
   Zielserver). Liefert der Server absolute **Pfad**-hrefs (`/caldav/...`), bleiben
   sie same-origin. Liefert er dagegen **volle URLs**
-  (`https://cloud.app-noster.de/caldav/...`), müssten diese umgeschrieben werden
+  (`https://<dein-server>/caldav/...`), müssten diese umgeschrieben werden
   (nginx `sub_filter`/`proxy_redirect`). → Beim ersten Login in den Browser-
   Netzwerk-Tab schauen: gehen alle CalDAV-Requests an die eigene Domain? Falls
   nicht, hier nachbessern.
 
-## Lokal testen (nur Dev, nicht Prod)
+## Lokal testen (localhost, ohne NPM)
 
-Ohne Proxy scheitert CalDAV an CORS. Für schnelle UI-Tests:
+Schnelltest mit dem GHCR-Image und einem `docker run` (Server-Host per `-e`):
 ```bash
-flutter run -d chrome --web-browser-flag "--disable-web-security"
+docker run -d --name tickdone-web -p 8085:80 \
+  -e CALDAV_HOST=dein.server.de \
+  ghcr.io/felixcrafter54/tickdone-web:latest
+# -> http://localhost:8085
 ```
-Für einen echten End-to-End-Test den Container bauen und über die Domain testen.
+
+Nur reine UI (ohne Proxy/CalDAV): `flutter run -d chrome`. Ein echter
+End-to-End-Test läuft über den Container (oben) bzw. hinter NPM über die Domain.

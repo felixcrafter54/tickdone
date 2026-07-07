@@ -1,6 +1,12 @@
 # Tickdone Web (Variante B): ein nginx liefert die Flutter-Web-Files UND
 # proxyt CalDAV same-origin -> KEIN CORS nötig. Davor sitzt der Nginx Proxy
 # Manager (NPM) nur für SSL + Forward auf diesen Container.
+#
+# Dies ist ein TEMPLATE: der nginx-Entrypoint ersetzt ${CALDAV_HOST} beim Start
+# per envsubst durch die gleichnamige Umgebungsvariable. So steht die konkrete
+# Server-Adresse NUR im Deploy (ENV), nicht im (public) Repo. nginx-eigene
+# Variablen ($uri, $request_uri, $caldav_host) bleiben unangetastet, weil sie
+# keine Umgebungsvariablen sind.
 server {
   listen 80;
   server_name _;
@@ -30,13 +36,13 @@ server {
     # ("host not found in upstream"). Dazu proxy_pass mit einer Variable
     # (verhindert die Start-Auflösung) + ein resolver.
     resolver 1.1.1.1 8.8.8.8 valid=60s ipv6=off;
-    set $caldav_host cloud.app-noster.de;
+    set $caldav_host ${CALDAV_HOST};
     # Pfad = Original-URI; da Proxy-Pfad und Zielpfad beide /caldav/ sind,
     # passt das 1:1.
     proxy_pass https://$caldav_host$request_uri;
 
     # Ziel hängt an SNI/vhost -> Host-Header + SNI explizit setzen.
-    proxy_set_header Host cloud.app-noster.de;
+    proxy_set_header Host ${CALDAV_HOST};
     proxy_ssl_server_name on;
 
     # Basic-Auth (Authorization) sowie Depth/If-Match/If-None-Match u.a.
