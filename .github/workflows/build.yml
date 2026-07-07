@@ -79,3 +79,55 @@ jobs:
         with:
           name: tickdone-android
           path: build/app/outputs/flutter-apk/app-release.apk
+
+  # Web-Build + Docker-Image nach GHCR. Der Flutter-Build laeuft als CI-Schritt
+  # (nicht im Docker), das schlanke Dockerfile kopiert nur build/web -> derselbe
+  # Dockerfile funktioniert lokal wie in der CI. Gepusht wird nur von main.
+  web-image:
+    name: Web-Image (GHCR)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Abhängigkeiten holen
+        run: flutter pub get
+
+      - name: Web-Build (Release)
+        run: flutter build web --release
+
+      - name: Web-Dateien als Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: tickdone-web
+          path: build/web
+
+      - name: Image-Name (lowercase) bestimmen
+        id: img
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tickdone-web" >> "$GITHUB_OUTPUT"
+
+      # Login + Push nur auf main (bei anderen Branches/PRs nur bauen/testen).
+      - name: An GHCR anmelden
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image bauen und pushen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/web/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ steps.img.outputs.name }}:latest
+            ${{ steps.img.outputs.name }}:${{ github.sha }}

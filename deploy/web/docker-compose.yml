@@ -1,15 +1,22 @@
 # Tickdone-Web-Container hinter dem bestehenden Nginx Proxy Manager (NPM).
 # NPM macht SSL + Forward auf diesen Container; hier liegt die Proxy-Config.
 #
-# WICHTIG: vorher den Web-Build erzeugen, damit build/web existiert:
-#   flutter build web --release
+# EINE Datei, zwei Wege:
+#  - SERVER (Image aus GHCR ziehen, kein Flutter/Quellcode noetig):
+#      docker compose -f deploy/web/docker-compose.yml pull
+#      docker compose -f deploy/web/docker-compose.yml up -d
+#  - LOKAL (selbst bauen; vorher `flutter build web --release`, build/web noetig):
+#      docker compose -f deploy/web/docker-compose.yml up --build
+#
+# `image:` = Ziel in GHCR (wird von der CI gepusht). Da auch `build:` gesetzt
+# ist, taggt ein lokaler `--build` das Ergebnis auf denselben Namen.
 services:
   tickdone-web:
+    image: ghcr.io/felixcrafter54/tickdone-web:latest
     build:
-      # Kontext = Repo-Wurzel, damit der Flutter-Build alle Quellen sieht.
+      # Kontext = Repo-Wurzel, damit das Dockerfile build/web findet.
       context: ../..
       dockerfile: deploy/web/Dockerfile
-    image: tickdone-web
     container_name: tickdone-web
     restart: unless-stopped
     # Zum lokalen Testen einen Port veröffentlichen; für den Betrieb hinter NPM

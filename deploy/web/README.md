@@ -23,36 +23,45 @@ Der `tickdone-web`-Container (dieses Verzeichnis) liefert die App **und** proxyt
 CalDAV. Der bereits laufende NPM bleibt „dumm": nur SSL + Forward auf diesen
 Container.
 
-## Schritte
+## Zwei Wege
 
-Das Docker-Image enthält **kein** Flutter – der Web-Build wird vorher mit deinem
-vorhandenen Flutter erzeugt und dann nur in ein schlankes nginx kopiert (kein
-GB-großes SDK-Image, kein Dart-Versions-Ärger, Build in Sekunden).
+Das Docker-Image enthält **kein** Flutter – der Web-Build wird vorher erzeugt und
+nur in ein schlankes nginx kopiert (kein GB-großes SDK-Image, kein Dart-Versions-
+Ärger, Build in Sekunden). Dasselbe Dockerfile läuft lokal wie in der CI.
 
-1. **Web-Build erzeugen** (auf einem Rechner mit Flutter):
-   ```bash
-   flutter build web --release
-   ```
-   Ergebnis liegt in `build/web` (ca. 40 MB, nicht in git).
+### Weg 1 (empfohlen): fertiges Image aus GHCR ziehen
+Die GitHub-Actions-CI baut bei jedem Push auf `main` das Image und pusht es nach
+`ghcr.io/felixcrafter54/tickdone-web:latest`. Der Server braucht **weder Flutter
+noch den Quellcode** – nur Docker + `docker-compose.yml`:
 
-   > Baust du auf einem anderen Rechner als dem Docker-Host (z.B. Flutter auf
-   > Windows, Docker auf Linux)? Dann `build/web` einfach in den Projektordner
-   > auf dem Docker-Host kopieren (nach `build/web`).
+```bash
+docker compose -f deploy/web/docker-compose.yml pull
+docker compose -f deploy/web/docker-compose.yml up -d
+```
 
-2. **Image bauen** (Repo-Wurzel als Kontext, `build/web` muss existieren):
-   ```bash
-   docker build -f deploy/web/Dockerfile -t tickdone-web .
-   ```
-   oder per Compose: `docker compose -f deploy/web/docker-compose.yml up -d --build`
+Einmalig, damit der Server ohne Login ziehen kann: das Package auf GitHub unter
+**Repo → Packages → tickdone-web → Package settings → Change visibility →
+Public** stellen. (Bleibt es privat: auf dem Server `docker login ghcr.io` mit
+einem Personal Access Token mit `read:packages`.)
 
-3. **In NPM einhängen** (Variante B):
-   - Proxy Host `tickdone.<eure-domain>` anlegen.
-   - Forward Hostname/IP: `tickdone-web`, Port `80` (Container im gemeinsamen
-     Docker-Netz – dazu in der `docker-compose.yml` das NPM-Netz aktivieren).
-   - SSL-Zertifikat wie gewohnt in NPM.
+Update später: neuer Push auf `main` → CI baut → am Server `pull` + `up -d`.
 
-4. **Aufrufen**: `https://tickdone.<eure-domain>` → Login mit Benutzer/Passwort
-   (kein Server-Feld nötig).
+### Weg 2: lokal selbst bauen (ohne CI/Registry)
+Auf einem Rechner mit Flutter:
+```bash
+flutter build web --release        # erzeugt build/web (~40 MB, nicht in git)
+docker compose -f deploy/web/docker-compose.yml up --build
+```
+> Flutter auf einem anderen Rechner als Docker (z.B. Windows/Linux)? `build/web`
+> einfach in den Projektordner auf dem Docker-Host kopieren (nach `build/web`).
+
+## In NPM einhängen (Variante B) und aufrufen
+
+- **NPM:** Proxy Host `tickdone.<eure-domain>` anlegen; Forward Hostname/IP
+  `tickdone-web`, Port `80` (Container im gemeinsamen Docker-Netz – dazu in der
+  `docker-compose.yml` das NPM-Netz aktivieren); SSL-Zertifikat wie gewohnt.
+- **Aufrufen:** `https://tickdone.<eure-domain>` → Login mit Benutzer/Passwort
+  (kein Server-Feld nötig).
 
 ## Wichtig / Fallstricke
 
