@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -29,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // scheiterte (z.B. Passwort geändert) – Passwort bleibt leer.
     final zugang = context.read<AppState>().gespeicherterZugang;
     if (zugang != null) {
-      _serverController.text = zugang.server;
+      if (!kIsWeb) _serverController.text = zugang.server;
       _benutzerController.text = zugang.benutzer;
     }
   }
@@ -46,7 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     final appState = context.read<AppState>();
     final erfolgreich = await appState.anmelden(
-      serverUrl: _serverController.text,
+      // Im Web ist der Server fix die eigene Domain (Same-Origin-Proxy).
+      serverUrl: kIsWeb ? Uri.base.origin : _serverController.text,
       benutzer: _benutzerController.text.trim(),
       passwort: _passwortController.text,
     );
@@ -84,22 +86,26 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 24),
-                  TextFormField(
-                    controller: _serverController,
-                    autofillHints: const [AutofillHints.url],
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Server-URL',
-                      hintText: 'z.B. https://server.example.de',
-                      prefixIcon: Icon(Icons.dns_outlined),
+                  // Server-Feld nur außerhalb des Webs: im Web ist der Server
+                  // fest die eigene Domain (Same-Origin-Proxy auf /caldav/).
+                  if (!kIsWeb) ...[
+                    TextFormField(
+                      controller: _serverController,
+                      autofillHints: const [AutofillHints.url],
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Server-URL',
+                        hintText: 'z.B. https://server.example.de',
+                        prefixIcon: Icon(Icons.dns_outlined),
+                      ),
+                      keyboardType: TextInputType.url,
+                      autocorrect: false,
+                      validator: (wert) => (wert == null || wert.trim().isEmpty)
+                          ? 'Bitte Server-URL eingeben'
+                          : null,
                     ),
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    validator: (wert) => (wert == null || wert.trim().isEmpty)
-                        ? 'Bitte Server-URL eingeben'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
+                  ],
                   TextFormField(
                     controller: _benutzerController,
                     autofillHints: const [AutofillHints.username],

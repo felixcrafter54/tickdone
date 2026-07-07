@@ -2,9 +2,16 @@ import 'dart:convert';
 
 import 'package:caldav/caldav.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../models/aufgabe.dart';
 import 'vtodo_patch.dart';
+
+/// Pfad, unter dem der Web-Build CalDAV same-origin erreicht (Reverse-Proxy).
+/// Bewusst derselbe Pfad wie am Server (`/caldav/`), damit vom Server
+/// gelieferte absolute href-Pfade (`/caldav/...`) same-origin aufgelöst werden
+/// und KEIN Umschreiben der Antworten nötig ist.
+const String webCaldavPfad = '/caldav/';
 
 /// Kapselt die CalDAV-Verbindung zum Server.
 ///
@@ -51,6 +58,21 @@ class CalDavService {
     required String passwort,
   }) async {
     trennen();
+
+    // Im Web läuft CalDAV über einen Same-Origin-Reverse-Proxy (löst CORS):
+    // feste Basis-URL auf der eigenen Domain, KEINE Discovery (die liefe über
+    // den Proxy ins Leere). Die eingegebene Server-URL wird im Web ignoriert.
+    if (kIsWeb) {
+      final url = '${Uri.base.origin}$webCaldavPfad';
+      _client = await CalDavClient.connect(
+        baseUrl: url,
+        username: benutzer,
+        password: passwort,
+      );
+      _verbundeneUrl = url;
+      return;
+    }
+
     // Eingegebene URL nur um das Schema ergänzen, sonst unangetastet lassen
     // (ein evtl. vorhandener End-Slash bleibt bewusst erhalten).
     final eingegeben = _ergaenzeSchema(serverUrl.trim());

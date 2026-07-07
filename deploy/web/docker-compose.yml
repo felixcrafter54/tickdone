@@ -1,0 +1,22 @@
+# Tickdone-Web-Container hinter dem bestehenden Nginx Proxy Manager (NPM).
+# NPM macht SSL + Forward auf diesen Container; hier liegt die Proxy-Config.
+services:
+  tickdone-web:
+    build:
+      # Kontext = Repo-Wurzel, damit der Flutter-Build alle Quellen sieht.
+      context: ../..
+      dockerfile: deploy/web/Dockerfile
+    image: tickdone-web
+    container_name: tickdone-web
+    restart: unless-stopped
+    # Zum lokalen Testen einen Port veröffentlichen; für den Betrieb hinter NPM
+    # nicht nötig (NPM erreicht den Container über das gemeinsame Docker-Netz).
+    ports:
+      - "8085:80"
+    # Für NPM: dieses Netz auf das NPM-Netz setzen (Name aus eurer NPM-Instanz),
+    # dann im NPM als Forward-Host "tickdone-web", Port 80 eintragen.
+    # networks: [npm]
+
+# networks:
+#   npm:
+#     external: true
