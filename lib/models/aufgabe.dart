@@ -80,6 +80,7 @@ class Aufgabe {
     int? prozent,
     bool? favorit,
     bool? meinTag,
+    int? sortOrder,
     String? etag,
     String? rohIcal,
   }) {
@@ -93,7 +94,7 @@ class Aufgabe {
       notiz: notiz ?? this.notiz,
       prozent: prozent ?? this.prozent,
       sequence: sequence,
-      sortOrder: sortOrder,
+      sortOrder: sortOrder ?? this.sortOrder,
       favorit: favorit ?? this.favorit,
       meinTag: meinTag ?? this.meinTag,
       erstellt: erstellt,

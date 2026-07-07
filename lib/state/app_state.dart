@@ -573,6 +573,47 @@ class AppState extends ChangeNotifier {
         patch: faelligPatch(datum),
       );
 
+  /// Aufgabe per Drag & Drop umsortieren (nur in Sortierung "Manuell").
+  /// [neuIndex] ist bereits um das entfernte Element angepasst
+  /// (ReorderableListView.onReorderItem). Vergibt neue
+  /// X-APPLE-SORT-ORDER-Werte im Abstand 1024 und speichert nur die
+  /// geänderten – optimistisch, ohne Neuladen.
+  Future<void> ordneAufgabenNeu(int altIndex, int neuIndex) =>
+      _ordneNeu(List<Aufgabe>.from(wurzelAufgaben), altIndex, neuIndex);
+
+  /// Schritte einer Aufgabe per Drag & Drop umsortieren.
+  Future<void> ordneSchritteNeu(
+          String parentUid, int altIndex, int neuIndex) =>
+      _ordneNeu(schritteVon(parentUid), altIndex, neuIndex);
+
+  Future<void> _ordneNeu(
+      List<Aufgabe> liste, int altIndex, int neuIndex) async {
+    if (altIndex < 0 || altIndex >= liste.length) return;
+    final ziel = neuIndex.clamp(0, liste.length - 1);
+    if (ziel == altIndex) return;
+    final bewegt = liste.removeAt(altIndex);
+    liste.insert(ziel, bewegt);
+    // Erst ALLE neuen Reihenfolge-Werte lokal setzen und nur EINMAL neu
+    // zeichnen: So steht die Liste sofort komplett in der neuen Reihenfolge,
+    // statt dass die Karten sichtbar nacheinander an ihren Platz springen.
+    final zuSpeichern = <String, int>{};
+    for (var i = 0; i < liste.length; i++) {
+      final wert = (i + 1) * 1024;
+      if (liste[i].sortOrder != wert) {
+        _ersetzeAufgabe(liste[i].kopieMit(sortOrder: wert));
+        zuSpeichern[liste[i].uid] = wert;
+      }
+    }
+    if (zuSpeichern.isEmpty) return;
+    notifyListeners();
+    // Danach im Hintergrund speichern (parallel je UID, keine sichtbaren
+    // Einzelschritte mehr).
+    await Future.wait([
+      for (final eintrag in zuSpeichern.entries)
+        _speichereNur(eintrag.key, sortOrderPatch(eintrag.value)),
+    ]);
+  }
+
   /// "Wichtig" (Stern) setzen/entfernen – gespeichert als PRIORITY 1.
   Future<void> setzeWichtig(String uid, bool wichtig) =>
       _aendereUndSpeichere(
@@ -756,7 +797,14 @@ class AppState extends ChangeNotifier {
 
     _ersetzeAufgabe(lokal(aufgabe));
     notifyListeners();
+    return _speichereNur(uid, patch);
+  }
 
+  /// Reiht nur das Speichern eines Patches in die Kette der UID ein – ohne
+  /// lokale Änderung und ohne notifyListeners. Der lokale Stand muss also
+  /// bereits gesetzt sein (z.B. beim Umsortieren, wo alle Werte auf einmal
+  /// lokal geändert und nur einmal gezeichnet werden).
+  Future<void> _speichereNur(String uid, IcalPatch patch) {
     _speichernBegonnen();
     final vorgaenger = _speicherKette[uid] ?? Future.value();
     final eigener = vorgaenger.then((_) async {
