@@ -5,6 +5,7 @@ import 'services/einstellungen_speicher.dart';
 import 'state/app_state.dart';
 import 'ui/app_theme.dart';
 import 'ui/start_screen.dart';
+import 'ui/verbindungs_ueberwachung.dart';
 
 void main() {
   runApp(const TickdoneApp());
@@ -32,7 +33,7 @@ class TickdoneApp extends StatelessWidget {
             ThemeWahl.dunkel => ThemeMode.dark,
             ThemeWahl.system => ThemeMode.system,
           },
-          home: const StartScreen(),
+          home: const VerbindungsUeberwachung(child: StartScreen()),
         ),
       ),
     );
