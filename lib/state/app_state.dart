@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../models/aufgabe.dart';
 import '../services/caldav_service.dart';
 import '../services/einstellungen_speicher.dart';
+import '../services/lokaler_speicher.dart';
 import '../services/vtodo_patch.dart';
 import '../services/zugangsspeicher.dart';
 
@@ -51,10 +52,15 @@ class AppState extends ChangeNotifier {
   final CalDavService _caldav = CalDavService();
   final Zugangsspeicher _speicher;
   final Einstellungenspeicher _einstellungenSpeicher;
+  final LokalerSpeicher _cache;
 
-  AppState([Zugangsspeicher? speicher, Einstellungenspeicher? einstellungen])
-      : _speicher = speicher ?? Zugangsspeicher(),
-        _einstellungenSpeicher = einstellungen ?? Einstellungenspeicher() {
+  AppState([
+    Zugangsspeicher? speicher,
+    Einstellungenspeicher? einstellungen,
+    LokalerSpeicher? cache,
+  ])  : _speicher = speicher ?? Zugangsspeicher(),
+        _einstellungenSpeicher = einstellungen ?? Einstellungenspeicher(),
+        _cache = cache ?? LokalerSpeicher() {
     unawaited(_ladeEinstellungen());
   }
 
@@ -233,6 +239,49 @@ class AppState extends ChangeNotifier {
       aufgaben = List<Aufgabe>.from(_alleAufgaben);
     }
     notifyListeners();
+    // Frischen Gesamtstand für den Sofortstart beim nächsten Mal sichern.
+    unawaited(_speichereSnapshot());
+  }
+
+  /// Zuletzt gespeicherten Cache laden und SOFORT anzeigen – noch vor der
+  /// Server-Verbindung. Öffnet die erste Liste, damit direkt Aufgaben
+  /// erscheinen. Ohne Cache (oder wenn schon Serverdaten da sind) passiert
+  /// nichts.
+  Future<void> ladeCache() async {
+    if (aufgabenlisten.isNotEmpty) return;
+    final schnappschuss = await _cache.laden();
+    if (schnappschuss == null || schnappschuss.listen.isEmpty) return;
+    if (aufgabenlisten.isNotEmpty) return; // in der Zwischenzeit verbunden
+    aufgabenlisten = schnappschuss.listen;
+    _cacheProListe
+      ..clear()
+      ..addAll(schnappschuss.aufgabenProListe);
+    for (final eintrag in _cacheProListe.entries) {
+      _offeneAnzahl[eintrag.key] =
+          eintrag.value.where((a) => !a.istSchritt && !a.erledigt).length;
+    }
+    // Erste Liste öffnen, damit sofort etwas zu sehen ist.
+    final erste = aufgabenlisten.first;
+    aktiveListe = erste;
+    aufgaben = List<Aufgabe>.from(_cacheProListe[erste.uid] ?? const []);
+    notifyListeners();
+  }
+
+  /// Aktuellen Gesamtstand (Listen + Aufgaben je Liste) lokal sichern.
+  Future<void> _speichereSnapshot() => _cache.speichern(Schnappschuss(
+        listen: List<Calendar>.from(aufgabenlisten),
+        aufgabenProListe: {
+          for (final eintrag in _cacheProListe.entries)
+            eintrag.key: List<Aufgabe>.from(eintrag.value),
+        },
+      ));
+
+  /// Gibt es gespeicherte Zugangsdaten? Für die Start-Navigation: liegt ein
+  /// Konto vor, zeigen wir direkt den Hauptscreen (mit Cache) und melden uns
+  /// im Hintergrund an – so ist die App auch offline nutzbar (lesend).
+  Future<bool> hatGespeichertesKonto() async {
+    gespeicherterZugang ??= await _speicher.laden();
+    return gespeicherterZugang != null;
   }
 
   /// Neue Aufgabenliste anlegen und die Übersicht aktualisieren.
@@ -503,6 +552,7 @@ class AppState extends ChangeNotifier {
     try {
       aufgaben = await _caldav.ladeAufgaben(liste);
       _cacheProListe[liste.uid] = aufgaben;
+      unawaited(_speichereSnapshot());
     } catch (fehler) {
       aufgabenFehler = _lesbareMeldung(fehler);
     } finally {
@@ -858,6 +908,7 @@ class AppState extends ChangeNotifier {
     _offeneAnzahl.clear();
     aufgabenFehler = null;
     fehlermeldung = null;
+    await _cache.loeschen();
     notifyListeners();
   }
 

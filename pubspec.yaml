@@ -39,6 +39,7 @@ dependencies:
   dio: ^5.10.0
   enough_icalendar: ^0.17.0
   flutter_secure_storage: ^10.3.1
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
