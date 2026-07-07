@@ -10,13 +10,15 @@ import 'app_theme.dart';
 import 'aufgabe_detail_screen.dart';
 import 'relative_zeit.dart';
 
-/// Läuft die App auf einem Desktop-Betriebssystem? Dann Rechtsklick-
+/// Läuft die App auf einem Desktop (inkl. Desktop-Browser)? Dann Rechtsklick-
 /// Kontextmenü mit Tastenkürzeln statt Mehrfachauswahl per langem Tippen.
+/// Auch im Web zählt ein Desktop-Betriebssystem als Desktop – so funktionieren
+/// die Kürzel (F2/Entf …) auch in der Web-Version; Mobil-Browser bleiben außen
+/// vor (dort meldet defaultTargetPlatform android/iOS).
 bool get istDesktop =>
-    !kIsWeb &&
-    (defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux ||
-        defaultTargetPlatform == TargetPlatform.macOS);
+    defaultTargetPlatform == TargetPlatform.windows ||
+    defaultTargetPlatform == TargetPlatform.linux ||
+    defaultTargetPlatform == TargetPlatform.macOS;
 
 /// Zeigt die Wurzel-Aufgaben der geöffneten Liste.
 ///
