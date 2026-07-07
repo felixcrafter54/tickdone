@@ -362,8 +362,23 @@ class _ListenSpalte extends StatelessWidget {
                                 listenFarbe(liste) ?? context.farben.akzent),
                         title: Text(liste.displayName,
                             maxLines: 1, overflow: TextOverflow.ellipsis),
-                        // Anzahl offener Aufgaben (leer bei 0/unbekannt).
-                        trailing: ListenZaehler(app.offeneAnzahl(liste.uid)),
+                        // Anzahl offener Aufgaben + Drei-Punkte-Menü.
+                        // Der Button ist wichtig für Touch-Geräte (Tablet
+                        // quer), wo es keinen Rechtsklick gibt.
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListenZaehler(app.offeneAnzahl(liste.uid)),
+                            PopupMenuButton<void Function()>(
+                              icon: const Icon(Icons.more_vert),
+                              tooltip: 'Listen-Aktionen',
+                              onSelected: (aktion) => aktion(),
+                              itemBuilder: (menuContext) =>
+                                  ListenAktionen.menueEintraege(
+                                      menuContext, liste),
+                            ),
+                          ],
+                        ),
                         onTap: () =>
                             context.read<AppState>().oeffneListe(liste),
                       ),
