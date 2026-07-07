@@ -93,6 +93,22 @@ void main() {
       );
     });
 
+    test('schritteVon ohne sortOrder: stabil nach Erstell-Zeit', () {
+      final s = AppState();
+      // Absichtlich verkehrte Listenreihenfolge – soll nach CREATED sortiert
+      // werden (früher erstellt = weiter oben), stabil nach Reload.
+      s.aufgaben = [
+        aufgabe('spaeter',
+            parentUid: 'p', erstellt: DateTime(2026, 7, 5, 12)),
+        aufgabe('frueher',
+            parentUid: 'p', erstellt: DateTime(2026, 7, 5, 10)),
+        aufgabe('mitte',
+            parentUid: 'p', erstellt: DateTime(2026, 7, 5, 11)),
+      ];
+      expect(s.schritteVon('p').map((a) => a.uid),
+          ['frueher', 'mitte', 'spaeter']);
+    });
+
     test('fortschrittVon zählt erledigte und gesamte Schritte', () {
       final fortschritt = state.fortschrittVon('haupt-1')!;
       expect(fortschritt.erledigt, 1);

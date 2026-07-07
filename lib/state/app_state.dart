@@ -443,15 +443,23 @@ class AppState extends ChangeNotifier {
   /// Die Schritte einer Aufgabe, manuell sortiert (X-APPLE-SORT-ORDER,
   /// ohne Wert ans Ende).
   List<Aufgabe> schritteVon(String parentUid) {
-    final schritte =
-        aufgaben.where((a) => a.parentUid == parentUid).toList()
-          ..sort((a, b) {
-            if (a.sortOrder == null && b.sortOrder == null) return 0;
-            if (a.sortOrder == null) return 1;
-            if (b.sortOrder == null) return -1;
-            return a.sortOrder!.compareTo(b.sortOrder!);
-          });
+    final schritte = aufgaben.where((a) => a.parentUid == parentUid).toList()
+      ..sort(_schrittVergleich);
     return schritte;
+  }
+
+  /// Stabile Schritt-Reihenfolge: primär X-APPLE-SORT-ORDER (ohne Wert ans
+  /// Ende), sekundär der Erstell-Zeitstempel. Da CREATED sich nie ändert,
+  /// bleibt die Reihenfolge auch nach einem Neuladen erhalten (sonst käme
+  /// die undeterministische Server-Reihenfolge durch).
+  static int _schrittVergleich(Aufgabe a, Aufgabe b) {
+    const ohneWert = 1 << 30;
+    final sa = a.sortOrder ?? ohneWert;
+    final sb = b.sortOrder ?? ohneWert;
+    if (sa != sb) return sa.compareTo(sb);
+    final ea = a.erstellt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final eb = b.erstellt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return ea.compareTo(eb);
   }
 
   /// Fortschritt "x von y" – null, wenn die Aufgabe keine Schritte hat.
