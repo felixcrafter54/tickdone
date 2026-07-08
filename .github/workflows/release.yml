@@ -46,7 +46,7 @@ jobs:
         run: cp build/app/outputs/flutter-apk/app-release.apk tickdone-${{ github.ref_name }}.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: android
+          name: release-android
           path: tickdone-*.apk
 
   windows:
@@ -67,7 +67,7 @@ jobs:
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath tickdone-${{ github.ref_name }}-windows.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: windows
+          name: release-windows
           path: tickdone-*-windows.zip
 
   web:
@@ -88,7 +88,7 @@ jobs:
         run: cd build/web && zip -r ../../tickdone-${{ github.ref_name }}-web.zip . && cd ../..
       - uses: actions/upload-artifact@v4
         with:
-          name: web
+          name: release-web
           path: tickdone-*-web.zip
       - name: Image-Name (lowercase)
         id: img
@@ -101,6 +101,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Versioniertes Image bauen und pushen
         uses: docker/build-push-action@v6
+        env:
+          # Kein Build-Record-Artefakt hochladen – dessen Download brach den
+          # Release-Job ab (und gebraucht wird es nicht).
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           file: deploy/web/Dockerfile
@@ -120,6 +124,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          # Nur unsere Release-Artefakte – nichts, was Actions nebenbei ablegen.
+          pattern: release-*
       - name: Release erstellen
         uses: softprops/action-gh-release@v2
         with:
