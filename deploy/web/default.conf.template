@@ -30,8 +30,19 @@ server {
   location = /.well-known/caldav { return 404; }
   location = /.well-known/carddav { return 404; }
 
+  # PWA-Updates zuverlaessig: den Service Worker immer revalidieren, damit der
+  # Browser eine neue Version schnell bemerkt.
+  location = /flutter_service_worker.js {
+    add_header Cache-Control "no-cache";
+  }
+
   # Flutter-Web ist eine SPA: unbekannte Pfade auf index.html (Client-Routing).
+  # Bewusst NICHT hart cachen: Flutter-Assets tragen keine Hash-Dateinamen
+  # (gleicher Name, neuer Inhalt) – hartes Caching wuerde alte Versionen
+  # ausliefern. Das Offline-Caching uebernimmt der Service Worker; die
+  # HTTP-Ebene revalidiert nur (ETag/304).
   location / {
+    add_header Cache-Control "no-cache";
     try_files $uri $uri/ /index.html;
   }
 

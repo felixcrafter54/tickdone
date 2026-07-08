@@ -1,0 +1,123 @@
+# Offizieller Release: wird durch einen Versions-Tag (z.B. v1.0.0) ausgeloest,
+# baut APK / Windows / Web, haengt sie an ein GitHub-Release und pusht ein
+# versioniertes Web-Image nach GHCR.
+#
+# Ausloesen:  git tag v1.0.0 && git push origin v1.0.0
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  android:
+    name: Android-APK
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Release-Keystore einrichten
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=release-keystore.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+      - run: flutter build apk --release
+      - name: APK benennen
+        run: cp build/app/outputs/flutter-apk/app-release.apk tickdone-${{ github.ref_name }}.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: tickdone-*.apk
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Zippen
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath tickdone-${{ github.ref_name }}-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: tickdone-*-windows.zip
+
+  web:
+    name: Web (Zip + GHCR-Image)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build web --release
+      - name: Web zippen
+        run: cd build/web && zip -r ../../tickdone-${{ github.ref_name }}-web.zip . && cd ../..
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: tickdone-*-web.zip
+      - name: Image-Name (lowercase)
+        id: img
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tickdone-web" >> "$GITHUB_OUTPUT"
+      - name: An GHCR anmelden
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Versioniertes Image bauen und pushen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/web/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.img.outputs.name }}:${{ github.ref_name }}
+            ${{ steps.img.outputs.name }}:latest
+
+  release:
+    name: GitHub-Release
+    needs: [android, windows, web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
