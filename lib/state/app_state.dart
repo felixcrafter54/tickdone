@@ -300,10 +300,19 @@ class AppState extends ChangeNotifier {
   }
 
   bool _passtZuSmart(Aufgabe a, Smartliste s) => switch (s) {
-        Smartliste.meinTag => a.meinTag,
+        // "Mein Tag": manuell markierte UND alles, was HEUTE fällig ist.
+        Smartliste.meinTag => a.meinTag || _heuteFaellig(a),
         Smartliste.wichtig => a.wichtig,
         Smartliste.geplant => a.faellig != null,
       };
+
+  /// Ob die Aufgabe am heutigen Tag fällig ist (tagesgenau, lokale Zeit).
+  bool _heuteFaellig(Aufgabe a) {
+    final f = a.faellig?.toLocal();
+    if (f == null) return false;
+    final heute = DateTime.now();
+    return f.year == heute.year && f.month == heute.month && f.day == heute.day;
+  }
 
   /// Anzahl offener Aufgaben in einer Smart-Liste (listenübergreifend).
   int smartAnzahl(Smartliste s) => _alleAufgaben
@@ -538,6 +547,13 @@ class AppState extends ChangeNotifier {
         AufgabenFilter.wichtig => a.wichtig,
       };
     }).toList();
+    // "Geplant" hat eine FESTE Sortierung: die überfälligsten zuerst (nach
+    // Fälligkeit aufsteigend). Die global gewählte Sortierung wird hier
+    // bewusst NICHT übernommen.
+    if (smart == Smartliste.geplant) {
+      gefiltert.sort(_vergleicher(Sortierung.faelligkeit));
+      return gefiltert;
+    }
     final vergleicher = _vergleicher(sortierung);
     if (einstellungen.wichtigeOben) {
       // Wichtige Aufgaben immer zuerst, dann die gewählte Sortierung.

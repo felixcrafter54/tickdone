@@ -39,7 +39,10 @@ void main() {
       state.aufgaben = [
         aufgabe('mein-tag', meinTag: true),
         aufgabe('wichtig', favorit: true),
-        aufgabe('geplant', faellig: DateTime(2026, 8, 1)),
+        // Fälligkeit klar in der Zukunft (nie "heute"), damit sie nicht
+        // automatisch in "Mein Tag" landet.
+        aufgabe('geplant',
+            faellig: DateTime.now().add(const Duration(days: 30))),
         aufgabe('nichts'),
         // Schritte tauchen in Smart-Listen nicht als Wurzel auf.
         aufgabe('schritt', parentUid: 'mein-tag', meinTag: true),
@@ -49,6 +52,32 @@ void main() {
     test('Mein Tag zeigt nur markierte Wurzel-Aufgaben', () {
       state.aktiveSmartliste = Smartliste.meinTag;
       expect(state.wurzelAufgaben.map((a) => a.uid), ['mein-tag']);
+    });
+
+    test('Mein Tag zeigt heute fällige Aufgaben automatisch', () {
+      state.aufgaben = [
+        aufgabe('heute', faellig: DateTime.now()),
+        aufgabe('morgen',
+            faellig: DateTime.now().add(const Duration(days: 1))),
+        aufgabe('markiert', meinTag: true),
+        aufgabe('nichts'),
+      ];
+      state.aktiveSmartliste = Smartliste.meinTag;
+      expect(state.wurzelAufgaben.map((a) => a.uid).toSet(),
+          {'heute', 'markiert'});
+    });
+
+    test('Geplant: überfälligste zuerst, ignoriert globale Sortierung', () {
+      // Global auf Titel gestellt – "Geplant" muss das ignorieren.
+      state.sortierung = Sortierung.titel;
+      state.aufgaben = [
+        aufgabe('z-frueh', faellig: DateTime(2026, 7, 1)),
+        aufgabe('a-spaet', faellig: DateTime(2026, 9, 1)),
+        aufgabe('m-mitte', faellig: DateTime(2026, 8, 1)),
+      ];
+      state.aktiveSmartliste = Smartliste.geplant;
+      expect(state.wurzelAufgaben.map((a) => a.uid),
+          ['z-frueh', 'm-mitte', 'a-spaet']);
     });
 
     test('Wichtig zeigt nur wichtige', () {
