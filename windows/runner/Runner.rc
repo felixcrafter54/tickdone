@@ -90,12 +90,13 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "Felix Noster" "\0"
-            VALUE "FileDescription", "tickdone" "\0"
+            VALUE "FileDescription", "Tickdone – CalDAV-Aufgaben" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "tickdone" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 Felix Noster. All rights reserved." "\0"
+            VALUE "Comments", "Lizenziert unter GPL-3.0 (siehe LICENSE). https://github.com/felixcrafter54/tickdone" "\0"
             VALUE "OriginalFilename", "tickdone.exe" "\0"
-            VALUE "ProductName", "tickdone" "\0"
+            VALUE "ProductName", "Tickdone" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

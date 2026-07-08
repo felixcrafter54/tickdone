@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../services/einstellungen_speicher.dart';
@@ -80,8 +81,43 @@ class EinstellungenScreen extends StatelessWidget {
               }
             },
           ),
+          const Divider(),
+          const _Abschnitt('Über'),
+          const _UeberTile(),
         ],
       ),
+    );
+  }
+}
+
+/// Zeigt App-Version (auch in der Web/PWA) und Lizenz; öffnet auf Tipp den
+/// Standard-Über-Dialog inkl. Open-Source-Lizenzen.
+class _UeberTile extends StatelessWidget {
+  const _UeberTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snap) {
+        final info = snap.data;
+        final version = info == null
+            ? '…'
+            : '${info.version} (${info.buildNumber})';
+        return ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: const Text('Tickdone'),
+          subtitle: Text('Version $version\nLizenz: GPL-3.0'),
+          isThreeLine: true,
+          onTap: () => showAboutDialog(
+            context: context,
+            applicationName: 'Tickdone',
+            applicationVersion: 'Version $version',
+            applicationLegalese: 'Lizenziert unter der GNU General Public '
+                'License v3.0 (GPL-3.0).\n\n© 2026 Felix Noster',
+          ),
+        );
+      },
     );
   }
 }
