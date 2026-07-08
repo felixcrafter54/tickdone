@@ -115,6 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read   # download-artifact@v4 braucht Lesezugriff auf Artefakte
     steps:
       - uses: actions/download-artifact@v4
         with:
