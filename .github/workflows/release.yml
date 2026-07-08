@@ -40,7 +40,8 @@ jobs:
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           EOF
-      - run: flutter build apk --release
+      # Version aus dem Tag (ohne fuehrendes v) einbetten, Build-Nummer = run_number.
+      - run: flutter build apk --release --build-name="${GITHUB_REF_NAME#v}" --build-number="${{ github.run_number }}"
       - name: APK benennen
         run: cp build/app/outputs/flutter-apk/app-release.apk tickdone-${{ github.ref_name }}.apk
       - uses: actions/upload-artifact@v4
@@ -58,7 +59,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build windows --release
+      - name: Windows bauen (Version aus Tag)
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          flutter build windows --release --build-name=$ver --build-number ${{ github.run_number }}
       - name: Zippen
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath tickdone-${{ github.ref_name }}-windows.zip
       - uses: actions/upload-artifact@v4
@@ -79,7 +83,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build web --release
+      - run: flutter build web --release --build-name="${GITHUB_REF_NAME#v}" --build-number="${{ github.run_number }}"
       - name: Web zippen
         run: cd build/web && zip -r ../../tickdone-${{ github.ref_name }}-web.zip . && cd ../..
       - uses: actions/upload-artifact@v4
@@ -111,6 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read   # download-artifact@v4 braucht Lesezugriff auf Artefakte
     steps:
       - uses: actions/download-artifact@v4
         with:
