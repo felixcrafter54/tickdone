@@ -48,6 +48,7 @@ jobs:
         with:
           name: release-android
           path: tickdone-*.apk
+          retention-days: 1
 
   windows:
     name: Windows
@@ -69,6 +70,7 @@ jobs:
         with:
           name: release-windows
           path: tickdone-*-windows.zip
+          retention-days: 1
 
   web:
     name: Web (Zip + GHCR-Image)
@@ -90,6 +92,7 @@ jobs:
         with:
           name: release-web
           path: tickdone-*-web.zip
+          retention-days: 1
       - name: Image-Name (lowercase)
         id: img
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tickdone-web" >> "$GITHUB_OUTPUT"
