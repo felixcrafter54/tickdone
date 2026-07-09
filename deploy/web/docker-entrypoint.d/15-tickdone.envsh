@@ -1,0 +1,29 @@
+# Wird vom nginx-Entrypoint GESOURCED (Endung .envsh), BEVOR die Templates per
+# envsubst verarbeitet werden (20-envsubst-on-templates.sh). Nur so steht die
+# hier gesetzte Variable CALDAV_UPSTREAM in der Template-Ersetzung bereit.
+#
+# Zweck: CALDAV_HOST darf tolerant eingetragen werden – so, wie verschiedene
+# Dienste (OpenCloud/ownCloud, Nextcloud, Radicale, Baïkal …) ihn ausgeben:
+# mit oder ohne Schema (https://), mit oder ohne Pfad, mit oder ohne End-Slash.
+#
+# Daraus wird abgeleitet:
+#   - CALDAV_UPSTREAM  = nur der blanke Host (für SNI/proxy_pass im Template)
+#   - /app-config.json = der aufbereitete Wert für die Anzeige in der Web-App
+#     ("Verbunden mit <host>").
+
+_roh="${CALDAV_HOST}"
+
+# Schema (z.B. https://) entfernen.
+_ohne_schema="$(printf '%s' "${_roh}" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##')"
+
+# Blanker Host = alles bis zum ersten Slash (für den Reverse-Proxy/SNI).
+CALDAV_UPSTREAM="$(printf '%s' "${_ohne_schema}" | sed -E 's#/.*$##')"
+export CALDAV_UPSTREAM
+
+# Anzeige-Wert = Host (plus evtl. Pfad) ohne Schema und ohne End-Slash.
+_anzeige="$(printf '%s' "${_ohne_schema}" | sed -E 's#/+$##')"
+
+# Als /app-config.json bereitstellen (die Web-App holt es beim Start).
+cat > /usr/share/nginx/html/app-config.json <<JSON
+{"caldavHost":"${_anzeige}"}
+JSON

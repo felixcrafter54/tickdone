@@ -1,0 +1,4 @@
+# Shell-Skripte müssen LF behalten – im Docker-Image (Linux/busybox) würde ein
+# CRLF-Zeilenende die Ausführung/das Sourcing brechen.
+*.sh text eol=lf
+*.envsh text eol=lf

@@ -66,7 +66,10 @@ class EinstellungenScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.person_outline),
             title: Text(zugang?.benutzer ?? 'Angemeldet'),
-            subtitle: Text(zugang?.server ?? app.verbundeneUrl ?? ''),
+            // Im Web zeigt der echte CalDAV-Host (aus der Deploy-ENV) mehr als
+            // die eigene Web-Domain; sonst der eingegebene Server.
+            subtitle: Text(
+                app.caldavAnzeigeHost ?? zugang?.server ?? app.verbundeneUrl ?? ''),
           ),
           ListTile(
             leading: const Icon(Icons.logout),
