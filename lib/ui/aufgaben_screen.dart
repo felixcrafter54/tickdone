@@ -128,6 +128,17 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
   /// UIDs der ausgewählten Aufgaben (Mehrfachauswahl auf dem Handy).
   final Set<String> _auswahl = {};
 
+  /// Ein fester ScrollController für die Liste. Damit bleibt die
+  /// Scroll-Position erhalten, wenn die Liste neu aufgebaut wird
+  /// (z. B. beim Wechsel in den Auswahlmodus).
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   bool get _auswahlModus => _auswahl.isNotEmpty;
 
   void _auswahlUmschalten(String uid) {
@@ -458,14 +469,19 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
     );
   }
 
-  /// Umsortieren per Ziehgriff ist nur in Sortierung "Manuell" sinnvoll –
-  /// und nicht im Auswahlmodus/Filter/Smart-Liste (dort ist die Anzeige
-  /// nicht 1:1 die manuelle Reihenfolge).
-  bool _umsortierbar(AppState app) =>
+  /// Grundsätzlich eine manuell sortierbare Ansicht? Nur dann zeigt die
+  /// Liste überhaupt Ziehgriffe (Sortierung "Manuell", ohne Filter/Smart-Liste).
+  /// Bewusst UNABHÄNGIG vom Auswahlmodus: So bleibt der Listen-Widget-Typ
+  /// beim Wechsel in die Mehrfachauswahl gleich und die Scroll-Position
+  /// springt nicht nach oben.
+  bool _grundSortierbar(AppState app) =>
       app.sortierung == Sortierung.manuell &&
       app.filter == AufgabenFilter.alle &&
-      app.aktiveSmartliste == null &&
-      !_auswahlModus;
+      app.aktiveSmartliste == null;
+
+  /// Ziehgriff pro Zeile ist nur sinnvoll, wenn grundsätzlich sortierbar –
+  /// und nicht im Auswahlmodus (dort wählt Tippen aus, statt zu ziehen).
+  bool _umsortierbar(AppState app) => _grundSortierbar(app) && !_auswahlModus;
 
   Widget _zeile(BuildContext context, AppState appState, Aufgabe aufgabe,
       int index) {
@@ -490,8 +506,13 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
 
   Widget _liste(
       BuildContext context, AppState appState, List<Aufgabe> aufgaben) {
-    if (_umsortierbar(appState)) {
+    // Widget-Typ hängt an _grundSortierbar (NICHT am Auswahlmodus): So bleibt
+    // die Liste beim Auswählen derselbe Typ und die Scroll-Position erhalten.
+    // Die Ziehgriffe werden im Auswahlmodus per _umsortierbar (in _zeile)
+    // ausgeblendet, sodass in der Auswahl nichts gezogen werden kann.
+    if (_grundSortierbar(appState)) {
       return ReorderableListView.builder(
+        scrollController: _scrollController,
         buildDefaultDragHandles: false,
         padding: const EdgeInsets.only(bottom: 12),
         itemCount: aufgaben.length,
@@ -502,6 +523,7 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       );
     }
     return ListView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.only(bottom: 12),
       itemCount: aufgaben.length,
       itemBuilder: (context, index) =>
