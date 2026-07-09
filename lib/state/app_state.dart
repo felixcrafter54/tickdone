@@ -467,6 +467,11 @@ class AppState extends ChangeNotifier {
   bool aufgabenLaden = false;
   String? aufgabenFehler;
 
+  /// true, wenn das letzte Laden an einem Verbindungsproblem scheiterte –
+  /// dann wird der gecachte Stand gezeigt und dezent "Offline" angezeigt
+  /// (statt einer roten Roh-Fehlermeldung).
+  bool offline = false;
+
   /// Titel der aktuellen Ansicht (Liste oder Smart-Liste).
   String get ansichtTitel =>
       aktiveSmartliste?.anzeige ?? aktiveListe?.displayName ?? 'Aufgaben';
@@ -634,19 +639,23 @@ class AppState extends ChangeNotifier {
   Future<void> oeffneListe(Calendar liste) async {
     aktiveListe = liste;
     aktiveSmartliste = null;
-    aufgaben = [];
     aufgabenFehler = null;
     // Beim Listenwechsel keine alte Detail-Auswahl behalten.
     aktiveAufgabeUid = null;
+    // SOFORT den gecachten Stand zeigen und die UI benachrichtigen – so ist
+    // der Listenwechsel offline-fest und blockiert NICHT auf Sync/Server.
+    aufgaben = List<Aufgabe>.from(_cacheProListe[liste.uid] ?? const []);
+    notifyListeners();
     await aufgabenNeuLaden();
   }
 
-  /// Aufgaben der aktuellen Ansicht (neu) vom Server holen.
+  /// Aufgaben der aktuellen Ansicht (neu) vom Server holen. Bei Netzwerk-
+  /// problemen bleibt der gecachte Stand stehen (kein Datenverlust, keine rote
+  /// Fehlermeldung – nur die dezente Offline-Anzeige).
   Future<void> aufgabenNeuLaden() async {
     if (!istVerbunden) return;
-    // Erst den Offline-Rückstand hochschreiben, damit der frische Serverstand
-    // die eigenen Änderungen bereits enthält (sonst käme z.B. eine offline
-    // gelöschte Aufgabe kurz zurück).
+    // Offline-Rückstand hochschreiben (No-Op, wenn die Queue leer ist), damit
+    // der frische Serverstand die eigenen Änderungen bereits enthält.
     await _synchronisiere();
     // Smart-Liste: alle Listen frisch laden und Anzeige neu aufbauen.
     if (aktiveSmartliste != null) {
@@ -660,14 +669,23 @@ class AppState extends ChangeNotifier {
     final liste = aktiveListe;
     if (liste == null) return;
     aufgabenLaden = true;
-    aufgabenFehler = null;
     notifyListeners();
     try {
-      aufgaben = await _caldav.ladeAufgaben(liste);
-      _cacheProListe[liste.uid] = aufgaben;
+      final geladen = await _caldav.ladeAufgaben(liste);
+      _cacheProListe[liste.uid] = geladen;
+      // Nur übernehmen, wenn diese Liste noch offen ist (Race bei schnellem
+      // Listenwechsel – sonst überschreibt ein später Load die falsche Liste).
+      if (aktiveListe?.uid == liste.uid) aufgaben = geladen;
+      offline = false;
+      aufgabenFehler = null;
       unawaited(_speichereSnapshot());
     } catch (fehler) {
-      aufgabenFehler = _lesbareMeldung(fehler);
+      if (_istNetzwerkfehler(fehler)) {
+        // Offline: gecachten Stand behalten, KEINE rote Meldung.
+        offline = true;
+      } else {
+        aufgabenFehler = _lesbareMeldung(fehler);
+      }
     } finally {
       aufgabenLaden = false;
       notifyListeners();
