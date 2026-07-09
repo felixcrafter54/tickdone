@@ -114,9 +114,9 @@ jobs:
           context: .
           file: deploy/web/Dockerfile
           push: true
-          tags: |
-            ${{ steps.img.outputs.name }}:${{ github.ref_name }}
-            ${{ steps.img.outputs.name }}:latest
+          # Nur die feste Version taggen. :latest gehoert dem main-Build
+          # (build.yml) -> kein doppelter/ueberschreibender :latest-Push mehr.
+          tags: ${{ steps.img.outputs.name }}:${{ github.ref_name }}
 
   release:
     name: GitHub-Release

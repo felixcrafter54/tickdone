@@ -166,6 +166,19 @@ jobs:
           context: .
           file: deploy/web/Dockerfile
           push: ${{ github.ref == 'refs/heads/main' }}
-          tags: |
-            ${{ steps.img.outputs.name }}:latest
-            ${{ steps.img.outputs.name }}:${{ github.sha }}
+          # Nur :latest (kein :sha-Tag mehr) -> alte main-Images werden untagged
+          # und lassen sich unten aufraeumen. Feste Versionen macht release.yml.
+          tags: ${{ steps.img.outputs.name }}:latest
+
+      # Alte, jetzt ungetaggte Images entfernen (die :vX.Y.Z-Releases bleiben,
+      # weil sie getaggt sind). Best-effort: schlaegt es fehl, bricht der Build
+      # nicht ab.
+      - name: Ungetaggte GHCR-Images aufraeumen
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: tickdone-web
+          package-type: container
+          delete-only-untagged-versions: 'true'
+          min-versions-to-keep: 2
