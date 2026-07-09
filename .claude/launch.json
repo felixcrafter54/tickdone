@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "tickdone-web",
-      "runtimeExecutable": "flutter",
-      "runtimeArgs": ["run", "-d", "web-server", "--web-port", "8080", "--release"],
-      "port": 8080
+      "name": "web-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8099", "--directory", "build/web"],
+      "port": 8099
     }
   ]
 }

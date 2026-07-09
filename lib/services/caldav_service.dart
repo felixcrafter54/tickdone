@@ -68,6 +68,10 @@ class CalDavService {
         baseUrl: url,
         username: benutzer,
         password: passwort,
+        // Kürzere Timeouts: offline/lahmer Server scheitert schneller, statt
+        // die App/den Sync ~30 s hängen zu lassen.
+        connectTimeout: const Duration(seconds: 12),
+        receiveTimeout: const Duration(seconds: 20),
         // Über HTTPS (Betrieb hinter NPM) streng; nur beim lokalen Testen
         // über http://localhost unverschlüsselt zulassen.
         allowInsecure: url.startsWith('http://'),
@@ -102,6 +106,9 @@ class CalDavService {
           baseUrl: url,
           username: benutzer,
           password: passwort,
+          // Kürzere Timeouts: offline/lahmer Server scheitert schneller.
+          connectTimeout: const Duration(seconds: 12),
+          receiveTimeout: const Duration(seconds: 20),
           // HTTP nur für lokale Test-Server zulassen (z.B. Radicale im LAN).
           allowInsecure: url.startsWith('http://'),
         );

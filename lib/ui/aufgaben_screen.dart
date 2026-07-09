@@ -410,6 +410,10 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
           // (das Anlegen dort wäre nicht eindeutig einer Liste zuzuordnen).
           if (appState.aktiveSmartliste == null)
             NeueAufgabeZeile(focusNode: widget.neueAufgabeFokus),
+          // Dezenter Offline-Hinweis (kein roter Fehler): zeigt den gecachten
+          // Stand. Nur wenn nichts aussteht – sonst reicht der Ausstehend-Hinweis.
+          if (appState.offline && appState.ausstehendeAnzahl == 0)
+            _OfflineHinweis(),
           // Hinweis auf offline gesammelte, noch nicht gespeicherte Änderungen.
           if (appState.ausstehendeAnzahl > 0)
             _AusstehendHinweis(anzahl: appState.ausstehendeAnzahl),
@@ -502,6 +506,32 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       itemCount: aufgaben.length,
       itemBuilder: (context, index) =>
           _zeile(context, appState, aufgaben[index], index),
+    );
+  }
+}
+
+/// Dezenter Offline-Hinweis (kein Fehler): der gecachte Stand wird gezeigt,
+/// die App verbindet sich automatisch neu.
+class _OfflineHinweis extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final farben = context.farben;
+    return Container(
+      width: double.infinity,
+      color: farben.flaeche,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off, size: 18, color: farben.textGedimmt),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Offline – gespeicherter Stand',
+              style: TextStyle(color: farben.textGedimmt, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

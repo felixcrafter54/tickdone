@@ -27,6 +27,9 @@ class FakeCalDav extends CalDavService {
   /// Wenn gesetzt: die Queue-Abarbeitung (schreibeRoh) wirft mit diesem Status.
   final int? syncFehlerStatus;
 
+  /// Wenn gesetzt: ladeAufgaben (Listen-Reload) wirft mit diesem Status.
+  final int? ladeFehlerStatus;
+
   int puts = 0;
   int deletes = 0;
 
@@ -35,7 +38,14 @@ class FakeCalDav extends CalDavService {
     this.wirftNetzwerkfehler = true,
     this.fehlerStatus,
     this.syncFehlerStatus,
+    this.ladeFehlerStatus,
   });
+
+  @override
+  Future<List<Aufgabe>> ladeAufgaben(Calendar liste) async {
+    if (ladeFehlerStatus != null) throw _fehler(ladeFehlerStatus);
+    return [];
+  }
 
   @override
   bool get istVerbunden => online;
@@ -230,6 +240,40 @@ void main() {
           state.wurzelAufgaben.any((a) => a.titel == 'Nicht verlieren'), isTrue);
       expect(state.ausstehendeAnzahl, 1);
       expect(state.aufgabenFehler, isNotNull);
+    });
+
+    test('Liste offline: gecachter Stand bleibt, Offline-Flag statt Fehler',
+        () async {
+      final cache = neuerCache();
+      await cache.speichern(Schnappschuss(
+        listen: [
+          Calendar(
+            uid: 'l1',
+            href: Uri.parse('https://server/liste/'),
+            displayName: 'L1',
+            supportedComponents: const ['VTODO'],
+          ),
+        ],
+        aufgabenProListe: {
+          'l1': [serverAufgabe('u1')],
+        },
+      ));
+      // Online (Client existiert), aber der Listen-Reload scheitert am Netz.
+      final fake = FakeCalDav(online: true, ladeFehlerStatus: 502);
+      final state = AppState(null, null, cache, fake);
+      await state.ladeCache();
+
+      // Liste öffnen -> zeigt sofort den Cache; der Server-Reload scheitert.
+      await state.oeffneListe(Calendar(
+        uid: 'l1',
+        href: Uri.parse('https://server/liste/'),
+        displayName: 'L1',
+        supportedComponents: const ['VTODO'],
+      ));
+
+      expect(state.wurzelAufgaben.map((a) => a.uid), ['u1']); // Cache bleibt
+      expect(state.offline, isTrue);
+      expect(state.aufgabenFehler, isNull); // keine rote Roh-Fehlermeldung
     });
 
     test('Sync verwirft bei Nicht-Netzwerkfehler den Eintrag NICHT', () async {

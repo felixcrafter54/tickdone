@@ -31,9 +31,11 @@ class _VerbindungsUeberwachungState extends State<VerbindungsUeberwachung> {
   }
 
   void _beiVerbindungswechsel(bool online) {
-    // Nur beim Übergang offline -> online synchronisieren.
+    // Beim Übergang offline -> online: Rückstand hochschreiben UND die aktuelle
+    // Ansicht neu laden (aufgabenNeuLaden synct zuerst, lädt dann frisch und
+    // löscht das Offline-Flag).
     if (online && _warOnline != true && mounted) {
-      context.read<AppState>().synchronisiereJetzt();
+      context.read<AppState>().aufgabenNeuLaden();
     }
     _warOnline = online;
   }
