@@ -14,4 +14,10 @@
 # der Umgebungsvariable CALDAV_HOST (nginx-Template via envsubst).
 FROM nginx:alpine
 COPY deploy/web/default.conf.template /etc/nginx/templates/default.conf.template
+# Leitet aus CALDAV_HOST den blanken Proxy-Host ab und schreibt /app-config.json
+# (wird als .envsh vom nginx-Entrypoint vor der envsubst-Ersetzung gesourced).
+# WICHTIG: Der Entrypoint sourct .envsh nur, wenn die Datei ausführbar ist –
+# das +x-Bit geht beim COPY aus Windows/CI sonst verloren.
+COPY deploy/web/docker-entrypoint.d/15-tickdone.envsh /docker-entrypoint.d/15-tickdone.envsh
+RUN chmod +x /docker-entrypoint.d/15-tickdone.envsh
 COPY build/web /usr/share/nginx/html

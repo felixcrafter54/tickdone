@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/aufgabe.dart';
+import '../services/app_konfiguration.dart';
 import '../services/caldav_service.dart';
 import '../services/einstellungen_speicher.dart';
 import '../services/lokaler_speicher.dart';
@@ -76,6 +77,7 @@ class AppState extends ChangeNotifier {
         _caldav = caldav ?? CalDavService() {
     unawaited(_ladeEinstellungen());
     unawaited(_ladeSortierungen());
+    unawaited(_ladeAppKonfiguration());
   }
 
   // ---- Offline: ausstehende Änderungen (Sync-Queue) ----
@@ -206,6 +208,19 @@ class AppState extends ChangeNotifier {
 
   bool get istVerbunden => _caldav.istVerbunden;
   String? get verbundeneUrl => _caldav.verbundeneUrl;
+
+  /// Im Web: der echte CalDAV-Host (aus der Deploy-ENV `CALDAV_HOST`, geliefert
+  /// als `/app-config.json`) für die „Verbunden mit …"-Anzeige. Auf nativen
+  /// Plattformen `null` (dort kennt die App den Server ohnehin).
+  String? caldavAnzeigeHost;
+
+  Future<void> _ladeAppKonfiguration() async {
+    final host = await AppKonfiguration.ladeCaldavHost();
+    if (host != null) {
+      caldavAnzeigeHost = host;
+      notifyListeners();
+    }
+  }
 
   /// Gespeicherte Zugangsdaten (für das Vorbefüllen des Login-Formulars,
   /// falls die automatische Anmeldung scheitert).

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import 'app_theme.dart';
 import 'haupt_screen.dart';
 
 /// Anmeldebildschirm: Server-URL, Benutzername, Passwort.
@@ -88,6 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 24),
                   // Server-Feld nur außerhalb des Webs: im Web ist der Server
                   // fest die eigene Domain (Same-Origin-Proxy auf /caldav/).
+                  // Dort zeigen wir stattdessen den verbundenen CalDAV-Host.
                   if (!kIsWeb) ...[
                     TextFormField(
                       controller: _serverController,
@@ -103,6 +105,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: (wert) => (wert == null || wert.trim().isEmpty)
                           ? 'Bitte Server-URL eingeben'
                           : null,
+                    ),
+                    const SizedBox(height: 12),
+                  ] else ...[
+                    _VerbundenMit(
+                      host: appState.caldavAnzeigeHost ?? Uri.base.host,
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -166,6 +173,49 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Dezenter Hinweis auf dem Web-Anmeldebildschirm, mit welchem CalDAV-Server
+/// die PWA verbunden ist (der echte Host aus der Deploy-ENV, nicht die eigene
+/// Web-Domain).
+class _VerbundenMit extends StatelessWidget {
+  const _VerbundenMit({required this.host});
+
+  final String host;
+
+  @override
+  Widget build(BuildContext context) {
+    final farben = context.farben;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: farben.flaeche,
+        borderRadius: BorderRadius.circular(tickdoneRadius),
+        border: Border.all(color: farben.rahmen),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.dns_outlined, size: 18, color: farben.textGedimmt),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(color: farben.textGedimmt, fontSize: 13),
+                children: [
+                  const TextSpan(text: 'Verbunden mit '),
+                  TextSpan(
+                    text: host,
+                    style: TextStyle(
+                        color: farben.text, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
