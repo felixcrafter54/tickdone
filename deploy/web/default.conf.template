@@ -30,9 +30,9 @@ server {
   location = /.well-known/caldav { return 404; }
   location = /.well-known/carddav { return 404; }
 
-  # PWA-Updates zuverlaessig: den Service Worker immer revalidieren, damit der
-  # Browser eine neue Version schnell bemerkt.
-  location = /flutter_service_worker.js {
+  # PWA-Updates zuverlaessig: den Service Worker (unser eigener sw.js) immer
+  # revalidieren, damit der Browser eine neue Version schnell bemerkt.
+  location = /sw.js {
     add_header Cache-Control "no-cache";
   }
 
