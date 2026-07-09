@@ -362,22 +362,6 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
     return AppBar(
       title: Text(appState.ansichtTitel),
       actions: [
-        // Filter: alle / offen / erledigt / wichtig
-        PopupMenuButton<AufgabenFilter>(
-          icon: Icon(appState.filter == AufgabenFilter.alle
-              ? Icons.filter_list
-              : Icons.filter_list_alt),
-          tooltip: 'Filtern',
-          onSelected: (wert) => context.read<AppState>().setzeFilter(wert),
-          itemBuilder: (_) => [
-            for (final wert in AufgabenFilter.values)
-              CheckedPopupMenuItem(
-                value: wert,
-                checked: appState.filter == wert,
-                child: Text(wert.anzeige),
-              ),
-          ],
-        ),
         // Sortierung: manuell / Fälligkeit / Wichtig / Titel / Erstellt.
         // In "Geplant" ausgeblendet – dort ist die Reihenfolge fest
         // (überfälligste zuerst).
@@ -470,13 +454,12 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
   }
 
   /// Grundsätzlich eine manuell sortierbare Ansicht? Nur dann zeigt die
-  /// Liste überhaupt Ziehgriffe (Sortierung "Manuell", ohne Filter/Smart-Liste).
+  /// Liste überhaupt Ziehgriffe (Sortierung "Manuell", keine Smart-Liste).
   /// Bewusst UNABHÄNGIG vom Auswahlmodus: So bleibt der Listen-Widget-Typ
   /// beim Wechsel in die Mehrfachauswahl gleich und die Scroll-Position
   /// springt nicht nach oben.
   bool _grundSortierbar(AppState app) =>
       app.sortierung == Sortierung.manuell &&
-      app.filter == AufgabenFilter.alle &&
       app.aktiveSmartliste == null;
 
   /// Ziehgriff pro Zeile ist nur sinnvoll, wenn grundsätzlich sortierbar –

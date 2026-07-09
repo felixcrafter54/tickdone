@@ -24,17 +24,6 @@ enum Sortierung {
   final String anzeige;
 }
 
-/// Filter der Aufgabenliste (Spec, Abschnitt 3).
-enum AufgabenFilter {
-  alle('Alle'),
-  offen('Offen'),
-  erledigt('Erledigt'),
-  wichtig('Wichtig');
-
-  const AufgabenFilter(this.anzeige);
-  final String anzeige;
-}
-
 /// Listenübergreifende Smart-Listen (wie MS To Do).
 enum Smartliste {
   meinTag('Mein Tag'),
@@ -525,15 +514,9 @@ class AppState extends ChangeNotifier {
   }
 
   Sortierung sortierung = Sortierung.manuell;
-  AufgabenFilter filter = AufgabenFilter.alle;
 
   void setzeSortierung(Sortierung neue) {
     sortierung = neue;
-    notifyListeners();
-  }
-
-  void setzeFilter(AufgabenFilter neuer) {
-    filter = neuer;
     notifyListeners();
   }
 
@@ -545,12 +528,7 @@ class AppState extends ChangeNotifier {
       if (a.istSchritt) return false;
       // In einer Smart-Liste nur passende Aufgaben (listenübergreifend).
       if (smart != null && !_passtZuSmart(a, smart)) return false;
-      return switch (filter) {
-        AufgabenFilter.alle => true,
-        AufgabenFilter.offen => !a.erledigt,
-        AufgabenFilter.erledigt => a.erledigt,
-        AufgabenFilter.wichtig => a.wichtig,
-      };
+      return true;
     }).toList();
     // "Geplant" hat eine FESTE Sortierung: die überfälligsten zuerst (nach
     // Fälligkeit aufsteigend). Die global gewählte Sortierung wird hier

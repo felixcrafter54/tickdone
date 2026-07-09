@@ -154,7 +154,7 @@ void main() {
     });
   });
 
-  group('Filtern und Sortieren', () {
+  group('Sortieren', () {
     late AppState state;
 
     setUp(() {
@@ -177,20 +177,6 @@ void main() {
             faellig: DateTime(2026, 7, 10),
             erstellt: DateTime(2026, 7, 2)),
       ];
-    });
-
-    test('Filter offen/erledigt/wichtig', () {
-      state.filter = AufgabenFilter.offen;
-      expect(state.wurzelAufgaben.map((a) => a.uid),
-          isNot(contains('a-erledigt')));
-
-      state.filter = AufgabenFilter.erledigt;
-      expect(state.wurzelAufgaben.map((a) => a.uid), ['a-erledigt']);
-
-      // Wichtig = hohe Priorität ODER alter FAVORITE-Marker.
-      state.filter = AufgabenFilter.wichtig;
-      expect(state.wurzelAufgaben.map((a) => a.uid).toSet(),
-          {'a-erledigt', 'c-favorit'});
     });
 
     test('Sortierung manuell: sortOrder, ohne Wert ans Ende', () {
