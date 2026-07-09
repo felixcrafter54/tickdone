@@ -22,27 +22,21 @@ class AppKonfiguration {
       final map = daten is String
           ? jsonDecode(daten) as Map<String, dynamic>
           : (daten as Map).cast<String, dynamic>();
-      return normalisiereHost(map['caldavHost'] as String?);
+      return anzeigeHost(map['caldavHost'] as String?);
     } catch (_) {
       // Kein Config-Endpunkt (z.B. lokaler Dev-Server) – dann kein Host.
       return null;
     }
   }
 
-  /// Bereitet den Host für die Anzeige auf – tolerant gegenüber dem, was
-  /// verschiedene Dienste (OpenCloud/ownCloud, Nextcloud, Radicale, Baïkal …)
-  /// ausgeben: mit oder ohne Schema (`https://`), mit oder ohne Pfad, mit oder
-  /// ohne End-Slash. Ergebnis ist Host (plus evtl. Pfad) ohne Schema/Slashes.
-  static String? normalisiereHost(String? wert) {
+  /// Der anzuzeigende Host – GENAU SO, wie er in der Deploy-ENV `CALDAV_HOST`
+  /// eingetragen wurde (nur Leerraum getrimmt). Leerer Wert oder eine nicht
+  /// ersetzte envsubst-Variable (`$` `{CALDAV_HOST}`) ergibt `null`, damit
+  /// stattdessen der Fallback greift.
+  static String? anzeigeHost(String? wert) {
     if (wert == null) return null;
-    var s = wert.trim();
-    // Leer oder eine nicht ersetzte envsubst-Variable ($ {CALDAV_HOST}) →
-    // nichts anzeigen.
+    final s = wert.trim();
     if (s.isEmpty || s.contains(r'${')) return null;
-    // Schema (http://, https://, …) entfernen.
-    s = s.replaceFirst(RegExp(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://'), '');
-    // Führende und abschließende Slashes entfernen.
-    s = s.replaceAll(RegExp(r'^/+|/+$'), '');
-    return s.isEmpty ? null : s;
+    return s;
   }
 }
