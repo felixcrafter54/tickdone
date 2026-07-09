@@ -133,7 +133,10 @@ jobs:
         run: flutter pub get
 
       - name: Web-Build (Release)
-        run: flutter build web --release
+        # Flutters SW ist deprecated -> abschalten (--pwa-strategy=none); Offline
+        # + Updates macht unser eigener web/sw.js. --no-web-resources-cdn buendelt
+        # CanvasKit lokal (same-origin), damit die App auch offline rendert.
+        run: flutter build web --release --pwa-strategy=none --no-web-resources-cdn
 
       - name: Web-Dateien als Artefakt hochladen
         uses: actions/upload-artifact@v4
