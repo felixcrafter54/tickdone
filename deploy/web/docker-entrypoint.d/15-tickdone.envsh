@@ -8,22 +8,20 @@
 #
 # Daraus wird abgeleitet:
 #   - CALDAV_UPSTREAM  = nur der blanke Host (für SNI/proxy_pass im Template)
-#   - /app-config.json = der aufbereitete Wert für die Anzeige in der Web-App
-#     ("Verbunden mit <host>").
+#   - /app-config.json = der Wert GENAU SO, wie er in der ENV eingetragen wurde
+#     (die Web-App zeigt ihn unverändert als "Verbunden mit …" an).
 
 _roh="${CALDAV_HOST}"
 
-# Schema (z.B. https://) entfernen.
+# Schema (z.B. https://) entfernen – nur für den Proxy-Host.
 _ohne_schema="$(printf '%s' "${_roh}" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##')"
 
 # Blanker Host = alles bis zum ersten Slash (für den Reverse-Proxy/SNI).
 CALDAV_UPSTREAM="$(printf '%s' "${_ohne_schema}" | sed -E 's#/.*$##')"
 export CALDAV_UPSTREAM
 
-# Anzeige-Wert = Host (plus evtl. Pfad) ohne Schema und ohne End-Slash.
-_anzeige="$(printf '%s' "${_ohne_schema}" | sed -E 's#/+$##')"
-
-# Als /app-config.json bereitstellen (die Web-App holt es beim Start).
+# Anzeige-Wert = der eingetragene CALDAV_HOST unverändert (nur als /app-config.json
+# bereitgestellt; die Web-App holt es beim Start).
 cat > /usr/share/nginx/html/app-config.json <<JSON
-{"caldavHost":"${_anzeige}"}
+{"caldavHost":"${_roh}"}
 JSON

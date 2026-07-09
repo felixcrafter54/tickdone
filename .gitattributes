@@ -2,3 +2,6 @@
 # CRLF-Zeilenende die Ausführung/das Sourcing brechen.
 *.sh text eol=lf
 *.envsh text eol=lf
+# nginx-Config/Template ebenfalls LF (wird im Linux-Container verarbeitet).
+*.template text eol=lf
+*.conf text eol=lf
