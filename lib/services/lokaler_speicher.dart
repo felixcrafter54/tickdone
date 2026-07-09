@@ -26,6 +26,7 @@ class Schnappschuss {
 class LokalerSpeicher {
   static const _schluessel = 'tickdone.schnappschuss.v1';
   static const _queueSchluessel = 'tickdone.syncqueue.v1';
+  static const _sortSchluessel = 'tickdone.sortierung.v1';
 
   /// Optional injizierte Instanz (für Tests). Sonst wird sie erst bei Bedarf
   /// geholt – so löst der Konstruktor ohne Flutter-Binding keinen Fehler aus.
@@ -88,6 +89,31 @@ class LokalerSpeicher {
       return SyncQueue.ausJson(jsonDecode(text) as List<dynamic>);
     } catch (_) {
       return SyncQueue();
+    }
+  }
+
+  /// Sortier-Einstellungen je Ansicht speichern. [proAnsicht] bildet einen
+  /// Ansichts-Schlüssel (z.B. `liste:<uid>` oder `smart:<name>`) auf einen
+  /// Wert `"<sortierung>,<richtung>"` ab.
+  Future<void> speichereSortierungen(Map<String, String> proAnsicht) async {
+    try {
+      final prefs = await _prefs();
+      await prefs.setString(_sortSchluessel, jsonEncode(proAnsicht));
+    } catch (_) {
+      // Optional – Fehler ignorieren.
+    }
+  }
+
+  /// Sortier-Einstellungen je Ansicht laden – leere Map, wenn nichts da ist.
+  Future<Map<String, String>> ladeSortierungen() async {
+    try {
+      final prefs = await _prefs();
+      final text = prefs.getString(_sortSchluessel);
+      if (text == null || text.isEmpty) return {};
+      final roh = jsonDecode(text) as Map<String, dynamic>;
+      return roh.map((k, v) => MapEntry(k, v as String));
+    } catch (_) {
+      return {};
     }
   }
 

@@ -220,5 +220,44 @@ void main() {
       expect(uids.sublist(0, 2).toSet(), {'a-erledigt', 'c-favorit'});
       expect(uids.last, 'b-offen');
     });
+
+    test('Standard-Richtung: Titel aufsteigend, Erstellt absteigend', () {
+      expect(Sortierung.titel.standardRichtung, SortRichtung.aufsteigend);
+      expect(Sortierung.erstellt.standardRichtung, SortRichtung.absteigend);
+    });
+
+    test('waehleSortierung: gleiche Sortierung kippt die Richtung', () {
+      state.waehleSortierung(Sortierung.titel);
+      expect(state.sortierung, Sortierung.titel);
+      expect(state.aktiveRichtung, SortRichtung.aufsteigend);
+      expect(state.wurzelAufgaben.map((a) => a.uid),
+          ['a-erledigt', 'b-offen', 'c-favorit']);
+
+      // Erneut "Titel" -> absteigend (Z-A).
+      state.waehleSortierung(Sortierung.titel);
+      expect(state.aktiveRichtung, SortRichtung.absteigend);
+      expect(state.wurzelAufgaben.map((a) => a.uid),
+          ['c-favorit', 'b-offen', 'a-erledigt']);
+
+      // Andere Sortierung startet wieder mit ihrer Standard-Richtung.
+      state.waehleSortierung(Sortierung.manuell);
+      expect(state.aktiveRichtung, SortRichtung.aufsteigend);
+    });
+
+    test('Sortierung wird je Ansicht gemerkt', () {
+      state.oeffneSmartliste(Smartliste.meinTag);
+      state.waehleSortierung(Sortierung.titel); // meinTag: Titel aufsteigend
+      state.waehleSortierung(Sortierung.titel); // -> absteigend
+
+      // Andere Ansicht hat ihre eigene (Standard-)Sortierung.
+      state.oeffneSmartliste(Smartliste.wichtig);
+      expect(state.sortierung, Sortierung.manuell);
+      expect(state.aktiveRichtung, SortRichtung.aufsteigend);
+
+      // Zurück zu "Mein Tag": vorherige Wahl ist wieder da.
+      state.oeffneSmartliste(Smartliste.meinTag);
+      expect(state.sortierung, Sortierung.titel);
+      expect(state.aktiveRichtung, SortRichtung.absteigend);
+    });
   });
 }

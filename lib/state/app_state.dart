@@ -22,6 +22,26 @@ enum Sortierung {
 
   const Sortierung(this.anzeige);
   final String anzeige;
+
+  /// Standard-Richtung je Kriterium – so, dass sie dem gewohnten Verhalten
+  /// entspricht (z.B. "Erstellt" = neueste zuerst = absteigend). Wird benutzt,
+  /// solange der Nutzer die Richtung nicht selbst umgeschaltet hat.
+  SortRichtung get standardRichtung => switch (this) {
+        Sortierung.erstellt => SortRichtung.absteigend,
+        _ => SortRichtung.aufsteigend,
+      };
+}
+
+/// Richtung einer Sortierung (auf-/absteigend).
+enum SortRichtung {
+  aufsteigend('Aufsteigend'),
+  absteigend('Absteigend');
+
+  const SortRichtung(this.anzeige);
+  final String anzeige;
+
+  SortRichtung get umgekehrt =>
+      this == SortRichtung.aufsteigend ? absteigend : aufsteigend;
 }
 
 /// Listenübergreifende Smart-Listen (wie MS To Do).
@@ -55,6 +75,7 @@ class AppState extends ChangeNotifier {
         _cache = cache ?? LokalerSpeicher(),
         _caldav = caldav ?? CalDavService() {
     unawaited(_ladeEinstellungen());
+    unawaited(_ladeSortierungen());
   }
 
   // ---- Offline: ausstehende Änderungen (Sync-Queue) ----
@@ -354,6 +375,7 @@ class AppState extends ChangeNotifier {
     // Erste Liste öffnen, damit sofort etwas zu sehen ist.
     final erste = aufgabenlisten.first;
     aktiveListe = erste;
+    _ladeAnsichtSortierung();
     aufgaben = List<Aufgabe>.from(_cacheProListe[erste.uid] ?? const []);
     notifyListeners();
   }
@@ -475,6 +497,7 @@ class AppState extends ChangeNotifier {
     aktiveListe = null;
     aktiveAufgabeUid = null;
     aufgabenFehler = null;
+    _ladeAnsichtSortierung();
     aufgaben = List<Aufgabe>.from(_alleAufgaben);
     notifyListeners();
     unawaited(aktualisiereOffeneAnzahlen());
@@ -513,11 +536,84 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sortierung der aktuell geöffneten Ansicht. Wird beim Öffnen einer Liste/
+  /// Smart-Liste aus [_sortProAnsicht] geladen und bei Änderung dort gemerkt.
   Sortierung sortierung = Sortierung.manuell;
 
-  void setzeSortierung(Sortierung neue) {
-    sortierung = neue;
+  /// Vom Nutzer gewählte Richtung. `null` = die Standard-Richtung der aktuellen
+  /// Sortierung ([Sortierung.standardRichtung]).
+  SortRichtung? richtung;
+
+  /// Effektive Richtung (Nutzerwahl oder Standard der Sortierung).
+  SortRichtung get aktiveRichtung => richtung ?? sortierung.standardRichtung;
+
+  /// Gespeicherte Sortierung je Ansicht (Schlüssel siehe [_ansichtSchluessel]);
+  /// Wert = `"<sortierung>,<richtung>"`. Wird beim Start geladen.
+  final Map<String, String> _sortProAnsicht = {};
+
+  /// Schlüssel der aktuellen Ansicht für die Sortier-Persistenz. "Geplant" hat
+  /// eine feste Sortierung und wird daher NICHT gemerkt (null).
+  String? get _ansichtSchluessel {
+    if (aktiveSmartliste == Smartliste.geplant) return null;
+    if (aktiveSmartliste != null) return 'smart:${aktiveSmartliste!.name}';
+    if (aktiveListe != null) return 'liste:${aktiveListe!.uid}';
+    return null;
+  }
+
+  /// Gespeicherte Sortierungen beim Start laden und auf die aktuelle Ansicht
+  /// anwenden (fällt bei fehlendem/ungültigem Speicher auf Standard zurück).
+  Future<void> _ladeSortierungen() async {
+    try {
+      final gespeichert = await _cache.ladeSortierungen();
+      _sortProAnsicht
+        ..clear()
+        ..addAll(gespeichert);
+      _ladeAnsichtSortierung();
+      notifyListeners();
+    } catch (_) {
+      // Kein Speicher (z.B. Test) – bei Standard bleiben.
+    }
+  }
+
+  /// Sortierung/Richtung der aktuellen Ansicht aus [_sortProAnsicht] setzen
+  /// (oder Standard, wenn nichts gemerkt ist).
+  void _ladeAnsichtSortierung() {
+    final schluessel = _ansichtSchluessel;
+    final wert = schluessel == null ? null : _sortProAnsicht[schluessel];
+    if (wert == null) {
+      sortierung = Sortierung.manuell;
+      richtung = null;
+      return;
+    }
+    final teile = wert.split(',');
+    sortierung = Sortierung.values
+            .where((s) => s.name == teile.first)
+            .firstOrNull ??
+        Sortierung.manuell;
+    richtung = teile.length > 1
+        ? SortRichtung.values.where((r) => r.name == teile[1]).firstOrNull
+        : null;
+  }
+
+  /// Sortierung wählen: dieselbe Sortierung erneut kippt die Richtung, eine
+  /// andere Sortierung startet mit ihrer Standard-Richtung. Wird pro Ansicht
+  /// gemerkt und persistiert.
+  void waehleSortierung(Sortierung wert) {
+    if (wert == sortierung) {
+      richtung = aktiveRichtung.umgekehrt;
+    } else {
+      sortierung = wert;
+      richtung = null;
+    }
+    _merkeAnsichtSortierung();
     notifyListeners();
+  }
+
+  void _merkeAnsichtSortierung() {
+    final schluessel = _ansichtSchluessel;
+    if (schluessel == null) return;
+    _sortProAnsicht[schluessel] = '${sortierung.name},${aktiveRichtung.name}';
+    unawaited(_cache.speichereSortierungen(_sortProAnsicht));
   }
 
   /// Nur die Wurzel-Aufgaben, gefiltert und sortiert – Schritte (Subtasks)
@@ -531,13 +627,14 @@ class AppState extends ChangeNotifier {
       return true;
     }).toList();
     // "Geplant" hat eine FESTE Sortierung: die überfälligsten zuerst (nach
-    // Fälligkeit aufsteigend). Die global gewählte Sortierung wird hier
-    // bewusst NICHT übernommen.
+    // Fälligkeit aufsteigend). Die gewählte Sortierung wird hier bewusst NICHT
+    // übernommen.
     if (smart == Smartliste.geplant) {
-      gefiltert.sort(_vergleicher(Sortierung.faelligkeit));
+      gefiltert
+          .sort(_vergleicher(Sortierung.faelligkeit, SortRichtung.aufsteigend));
       return gefiltert;
     }
-    final vergleicher = _vergleicher(sortierung);
+    final vergleicher = _vergleicher(sortierung, aktiveRichtung);
     if (einstellungen.wichtigeOben) {
       // Wichtige Aufgaben immer zuerst, dann die gewählte Sortierung.
       gefiltert.sort((a, b) {
@@ -550,13 +647,18 @@ class AppState extends ChangeNotifier {
     return gefiltert;
   }
 
-  /// Vergleicher je Sortierung; fehlende Werte immer ans Ende.
-  static int Function(Aufgabe, Aufgabe) _vergleicher(Sortierung sortierung) {
+  /// Vergleicher je Sortierung UND Richtung. Der Basisvergleich ist immer
+  /// aufsteigend definiert; bei [SortRichtung.absteigend] wird er umgekehrt.
+  /// Fehlende Werte bleiben unabhängig von der Richtung immer am Ende.
+  static int Function(Aufgabe, Aufgabe) _vergleicher(
+      Sortierung sortierung, SortRichtung richtung) {
+    final faktor = richtung == SortRichtung.aufsteigend ? 1 : -1;
+
     int fehlendeAnsEnde<T>(T? a, T? b, int Function(T, T) vergleich) {
       if (a == null && b == null) return 0;
-      if (a == null) return 1;
+      if (a == null) return 1; // fehlend immer ans Ende, egal welche Richtung
       if (b == null) return -1;
-      return vergleich(a, b);
+      return faktor * vergleich(a, b);
     }
 
     return switch (sortierung) {
@@ -564,16 +666,17 @@ class AppState extends ChangeNotifier {
           fehlendeAnsEnde(a.sortOrder, b.sortOrder, (x, y) => x.compareTo(y)),
       Sortierung.faelligkeit => (a, b) =>
           fehlendeAnsEnde(a.faellig, b.faellig, (x, y) => x.compareTo(y)),
-      // Wichtige (Stern) zuerst.
+      // Aufsteigend = wichtige (Stern) zuerst.
       Sortierung.wichtig => (a, b) {
         if (a.wichtig == b.wichtig) return 0;
-        return a.wichtig ? -1 : 1;
+        return faktor * (a.wichtig ? -1 : 1);
       },
       Sortierung.titel => (a, b) =>
-          a.titel.toLowerCase().compareTo(b.titel.toLowerCase()),
-      // Neueste zuerst.
+          faktor * a.titel.toLowerCase().compareTo(b.titel.toLowerCase()),
+      // Aufsteigend = älteste zuerst (Standard-Richtung ist absteigend =
+      // neueste zuerst, wie bisher).
       Sortierung.erstellt => (a, b) =>
-          fehlendeAnsEnde(a.erstellt, b.erstellt, (x, y) => y.compareTo(x)),
+          fehlendeAnsEnde(a.erstellt, b.erstellt, (x, y) => x.compareTo(y)),
     };
   }
 
@@ -618,6 +721,7 @@ class AppState extends ChangeNotifier {
     aktiveListe = liste;
     aktiveSmartliste = null;
     aufgabenFehler = null;
+    _ladeAnsichtSortierung();
     // Beim Listenwechsel keine alte Detail-Auswahl behalten.
     aktiveAufgabeUid = null;
     // SOFORT den gecachten Stand zeigen und die UI benachrichtigen – so ist

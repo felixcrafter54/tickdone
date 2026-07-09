@@ -364,19 +364,32 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       actions: [
         // Sortierung: manuell / Fälligkeit / Wichtig / Titel / Erstellt.
         // In "Geplant" ausgeblendet – dort ist die Reihenfolge fest
-        // (überfälligste zuerst).
+        // (überfälligste zuerst). Erneutes Wählen der aktiven Sortierung
+        // kippt die Richtung; der Pfeil zeigt auf-/absteigend.
         if (appState.aktiveSmartliste != Smartliste.geplant)
           PopupMenuButton<Sortierung>(
             icon: const Icon(Icons.sort),
             tooltip: 'Sortieren',
             onSelected: (wert) =>
-                context.read<AppState>().setzeSortierung(wert),
+                context.read<AppState>().waehleSortierung(wert),
             itemBuilder: (_) => [
               for (final wert in Sortierung.values)
                 CheckedPopupMenuItem(
                   value: wert,
                   checked: appState.sortierung == wert,
-                  child: Text(wert.anzeige),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(wert.anzeige)),
+                      if (appState.sortierung == wert)
+                        Icon(
+                          appState.aktiveRichtung == SortRichtung.aufsteigend
+                              ? Icons.arrow_upward
+                              : Icons.arrow_downward,
+                          size: 18,
+                          color: context.farben.akzent,
+                        ),
+                    ],
+                  ),
                 ),
             ],
           ),

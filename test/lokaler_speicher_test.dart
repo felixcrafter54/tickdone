@@ -64,6 +64,24 @@ void main() {
       await speicher.loeschen();
       expect(await speicher.laden(), isNull);
     });
+
+    test('Sortierungen je Ansicht: Round-Trip', () async {
+      SharedPreferences.setMockInitialValues({});
+      final speicher = LokalerSpeicher(SharedPreferences.getInstance());
+      await speicher.speichereSortierungen({
+        'liste:l1': 'titel,absteigend',
+        'smart:meinTag': 'faelligkeit,aufsteigend',
+      });
+      final geladen = await speicher.ladeSortierungen();
+      expect(geladen['liste:l1'], 'titel,absteigend');
+      expect(geladen['smart:meinTag'], 'faelligkeit,aufsteigend');
+    });
+
+    test('Sortierungen ohne Daten liefern leere Map', () async {
+      SharedPreferences.setMockInitialValues({});
+      final speicher = LokalerSpeicher(SharedPreferences.getInstance());
+      expect(await speicher.ladeSortierungen(), isEmpty);
+    });
   });
 
   group('AppState.ladeCache', () {
