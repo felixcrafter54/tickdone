@@ -31,6 +31,10 @@ enum Sortierung {
         Sortierung.erstellt => SortRichtung.absteigend,
         _ => SortRichtung.aufsteigend,
       };
+
+  /// "Manuell" ist die per Drag & Drop gepflegte Reihenfolge – dort gibt es
+  /// KEIN auf-/absteigend (kein Pfeil, kein Umschalten).
+  bool get hatRichtung => this != Sortierung.manuell;
 }
 
 /// Richtung einer Sortierung (auf-/absteigend).
@@ -615,6 +619,8 @@ class AppState extends ChangeNotifier {
   /// gemerkt und persistiert.
   void waehleSortierung(Sortierung wert) {
     if (wert == sortierung) {
+      // "Manuell" hat keine Richtung – erneutes Wählen tut nichts.
+      if (!wert.hatRichtung) return;
       richtung = aktiveRichtung.umgekehrt;
     } else {
       sortierung = wert;
@@ -649,7 +655,10 @@ class AppState extends ChangeNotifier {
           .sort(_vergleicher(Sortierung.faelligkeit, SortRichtung.aufsteigend));
       return gefiltert;
     }
-    final vergleicher = _vergleicher(sortierung, aktiveRichtung);
+    // "Manuell" ignoriert die Richtung (immer nach sortOrder aufsteigend).
+    final effektiveRichtung =
+        sortierung.hatRichtung ? aktiveRichtung : SortRichtung.aufsteigend;
+    final vergleicher = _vergleicher(sortierung, effektiveRichtung);
     if (einstellungen.wichtigeOben) {
       // Wichtige Aufgaben immer zuerst, dann die gewählte Sortierung.
       gefiltert.sort((a, b) {
@@ -856,8 +865,13 @@ class AppState extends ChangeNotifier {
   /// (ReorderableListView.onReorderItem). Vergibt neue
   /// X-APPLE-SORT-ORDER-Werte im Abstand 1024 und speichert nur die
   /// geänderten – optimistisch, ohne Neuladen.
-  Future<void> ordneAufgabenNeu(int altIndex, int neuIndex) =>
-      _ordneNeu(List<Aufgabe>.from(wurzelAufgaben), altIndex, neuIndex);
+  /// [altIndex]/[neuIndex] beziehen sich auf die Liste der OFFENEN Wurzel-
+  /// Aufgaben (erledigte liegen in ihrer eigenen, nicht sortierbaren Sektion).
+  Future<void> ordneAufgabenNeu(int altIndex, int neuIndex) => _ordneNeu(
+        wurzelAufgaben.where((a) => !a.erledigt).toList(),
+        altIndex,
+        neuIndex,
+      );
 
   /// Schritte einer Aufgabe per Drag & Drop umsortieren.
   Future<void> ordneSchritteNeu(

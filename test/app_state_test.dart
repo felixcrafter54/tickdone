@@ -244,6 +244,19 @@ void main() {
       expect(state.aktiveRichtung, SortRichtung.aufsteigend);
     });
 
+    test('Manuell hat keine Richtung und lässt sich nicht umschalten', () {
+      expect(Sortierung.manuell.hatRichtung, isFalse);
+      expect(Sortierung.titel.hatRichtung, isTrue);
+
+      state.waehleSortierung(Sortierung.manuell);
+      expect(state.sortierung, Sortierung.manuell);
+      final vorher = state.wurzelAufgaben.map((a) => a.uid).toList();
+      // Erneut "Manuell" -> keine Richtungsumkehr, Reihenfolge bleibt gleich.
+      state.waehleSortierung(Sortierung.manuell);
+      expect(state.aktiveRichtung, SortRichtung.aufsteigend);
+      expect(state.wurzelAufgaben.map((a) => a.uid), vorher);
+    });
+
     test('Sortierung wird je Ansicht gemerkt', () {
       state.oeffneSmartliste(Smartliste.meinTag);
       state.waehleSortierung(Sortierung.titel); // meinTag: Titel aufsteigend
