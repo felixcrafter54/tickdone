@@ -133,6 +133,10 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
   /// (z. B. beim Wechsel in den Auswahlmodus).
   final ScrollController _scrollController = ScrollController();
 
+  /// Ist die "Erledigt"-Sektion eingeklappt (versteckt)? Standardmäßig ja –
+  /// erledigte Aufgaben sollen die offene Liste nicht zumüllen.
+  bool _erledigtEingeklappt = true;
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -380,7 +384,8 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                   child: Row(
                     children: [
                       Expanded(child: Text(wert.anzeige)),
-                      if (appState.sortierung == wert)
+                      // "Manuell" hat keine Richtung -> kein Pfeil.
+                      if (appState.sortierung == wert && wert.hatRichtung)
                         Icon(
                           appState.aktiveRichtung == SortRichtung.aufsteigend
                               ? Icons.arrow_upward
@@ -480,7 +485,7 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
   bool _umsortierbar(AppState app) => _grundSortierbar(app) && !_auswahlModus;
 
   Widget _zeile(BuildContext context, AppState appState, Aufgabe aufgabe,
-      int index) {
+      {int? ziehIndex}) {
     final markiert = _auswahlModus
         ? _auswahl.contains(aufgabe.uid)
         : widget.eingebettet && appState.aktiveAufgabeUid == aufgabe.uid;
@@ -496,34 +501,126 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       kontextZiele: ziele,
       onTap: () => _aufTap(aufgabe),
       onLongPress: () => _auswahlUmschalten(aufgabe.uid),
-      ziehIndex: _umsortierbar(appState) ? index : null,
+      ziehIndex: ziehIndex,
     );
   }
 
+  /// Offene Aufgaben oben; erledigte darunter in einer einklappbaren Sektion
+  /// ("Erledigt N"), damit sie sich verstecken lassen und die offene Liste
+  /// nicht zumüllen. Neue (offene) Aufgaben landen dadurch automatisch ÜBER
+  /// dem Erledigt-Bereich.
   Widget _liste(
       BuildContext context, AppState appState, List<Aufgabe> aufgaben) {
-    // Widget-Typ hängt an _grundSortierbar (NICHT am Auswahlmodus): So bleibt
-    // die Liste beim Auswählen derselbe Typ und die Scroll-Position erhalten.
-    // Die Ziehgriffe werden im Auswahlmodus per _umsortierbar (in _zeile)
-    // ausgeblendet, sodass in der Auswahl nichts gezogen werden kann.
-    if (_grundSortierbar(appState)) {
-      return ReorderableListView.builder(
-        scrollController: _scrollController,
-        buildDefaultDragHandles: false,
-        padding: const EdgeInsets.only(bottom: 12),
-        itemCount: aufgaben.length,
-        onReorderItem: (alt, neu) =>
-            context.read<AppState>().ordneAufgabenNeu(alt, neu),
-        itemBuilder: (context, index) =>
-            _zeile(context, appState, aufgaben[index], index),
-      );
-    }
-    return ListView.builder(
+    final offen = [for (final a in aufgaben) if (!a.erledigt) a];
+    final erledigt = [for (final a in aufgaben) if (a.erledigt) a];
+    // Reorderbar hängt an _grundSortierbar (NICHT am Auswahlmodus): So bleibt
+    // der Widget-Typ beim Wechsel in den Auswahlmodus gleich und die
+    // Scroll-Position springt nicht nach oben. Die Ziehgriffe werden im
+    // Auswahlmodus per _umsortierbar ausgeblendet.
+    final reorderbar = _grundSortierbar(appState);
+    return CustomScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.only(bottom: 12),
-      itemCount: aufgaben.length,
-      itemBuilder: (context, index) =>
-          _zeile(context, appState, aufgaben[index], index),
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        // --- Offene Aufgaben ---
+        if (reorderbar)
+          SliverReorderableList(
+            itemCount: offen.length,
+            onReorderItem: (alt, neu) =>
+                context.read<AppState>().ordneAufgabenNeu(alt, neu),
+            itemBuilder: (context, index) => _zeile(
+              context,
+              appState,
+              offen[index],
+              ziehIndex: _umsortierbar(appState) ? index : null,
+            ),
+          )
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _zeile(context, appState, offen[index]),
+              childCount: offen.length,
+            ),
+          ),
+        // Hinweis, falls nur noch erledigte Aufgaben da sind.
+        if (offen.isEmpty && erledigt.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Keine offenen Aufgaben.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: context.farben.textGedimmt),
+              ),
+            ),
+          ),
+        // --- Erledigt-Sektion (einklappbar) ---
+        if (erledigt.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _ErledigtKopf(
+              anzahl: erledigt.length,
+              eingeklappt: _erledigtEingeklappt,
+              onToggle: () => setState(
+                  () => _erledigtEingeklappt = !_erledigtEingeklappt),
+            ),
+          ),
+        if (erledigt.isNotEmpty && !_erledigtEingeklappt)
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _zeile(context, appState, erledigt[index]),
+              childCount: erledigt.length,
+            ),
+          ),
+        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+      ],
+    );
+  }
+}
+
+/// Einklappbarer Kopf der "Erledigt"-Sektion (Pfeil + Anzahl). Tippen
+/// klappt die erledigten Aufgaben auf/zu.
+class _ErledigtKopf extends StatelessWidget {
+  const _ErledigtKopf({
+    required this.anzahl,
+    required this.eingeklappt,
+    required this.onToggle,
+  });
+
+  final int anzahl;
+  final bool eingeklappt;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final farben = context.farben;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: Material(
+        color: farben.flaeche,
+        borderRadius: BorderRadius.circular(tickdoneRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(tickdoneRadius),
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  eingeklappt ? Icons.expand_more : Icons.expand_less,
+                  size: 20,
+                  color: farben.textGedimmt,
+                ),
+                const SizedBox(width: 8),
+                Text('Erledigt',
+                    style: TextStyle(
+                        color: farben.text, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 8),
+                Text('$anzahl', style: TextStyle(color: farben.textGedimmt)),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
