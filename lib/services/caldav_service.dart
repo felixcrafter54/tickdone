@@ -7,12 +7,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/aufgabe.dart';
 import 'vtodo_patch.dart';
 
-/// Pfad, unter dem der Web-Build CalDAV same-origin erreicht (Reverse-Proxy).
-/// Bewusst derselbe Pfad wie am Server (`/caldav/`), damit vom Server
-/// gelieferte absolute href-Pfade (`/caldav/...`) same-origin aufgelöst werden
-/// und KEIN Umschreiben der Antworten nötig ist.
-const String webCaldavPfad = '/caldav/';
-
 /// Kapselt die CalDAV-Verbindung zum Server.
 ///
 /// Der Nutzer gibt meist nur die Domain ein. Das Paket `caldav` übernimmt die
@@ -59,36 +53,27 @@ class CalDavService {
   }) async {
     trennen();
 
-    // Im Web läuft CalDAV über einen Same-Origin-Reverse-Proxy (löst CORS):
-    // feste Basis-URL auf der eigenen Domain, KEINE Discovery (die liefe über
-    // den Proxy ins Leere). Die eingegebene Server-URL wird im Web ignoriert.
-    if (kIsWeb) {
-      final url = '${Uri.base.origin}$webCaldavPfad';
-      _client = await CalDavClient.connect(
-        baseUrl: url,
-        username: benutzer,
-        password: passwort,
-        // Kürzere Timeouts: offline/lahmer Server scheitert schneller, statt
-        // die App/den Sync ~30 s hängen zu lassen.
-        connectTimeout: const Duration(seconds: 12),
-        receiveTimeout: const Duration(seconds: 20),
-        // Über HTTPS (Betrieb hinter NPM) streng; nur beim lokalen Testen
-        // über http://localhost unverschlüsselt zulassen.
-        allowInsecure: url.startsWith('http://'),
-      );
-      _verbundeneUrl = url;
-      return;
-    }
-
-    // Eingegebene URL nur um das Schema ergänzen, sonst unangetastet lassen
-    // (ein evtl. vorhandener End-Slash bleibt bewusst erhalten).
-    final eingegeben = _ergaenzeSchema(serverUrl.trim());
-    final basis = _ohneEndSlash(eingegeben);
     // Protokoll aller Versuche – landet bei Misserfolg in der Fehlermeldung,
     // damit man sieht, welcher Kandidat woran gescheitert ist.
     final diagnose = <String>[];
 
-    final kandidaten = <String>[eingegeben];
+    final String basis;
+    final kandidaten = <String>[];
+    if (kIsWeb) {
+      // Im Web läuft CalDAV über einen Same-Origin-Reverse-Proxy (löst CORS).
+      // Der nginx reicht sowohl `.well-known` als auch die WebDAV-Methoden an
+      // den echten Server durch – die RFC-6764-Discovery funktioniert also
+      // über den Proxy. So sind BELIEBIGE Server/Basispfade möglich (nicht mehr
+      // fest `/caldav/`). Basis = eigene Domain; die eingegebene URL entfällt.
+      basis = _ohneEndSlash(Uri.base.origin);
+    } else {
+      // Eingegebene URL nur um das Schema ergänzen, sonst unangetastet lassen
+      // (ein evtl. vorhandener End-Slash bleibt bewusst erhalten).
+      final eingegeben = _ergaenzeSchema(serverUrl.trim());
+      basis = _ohneEndSlash(eingegeben);
+      kandidaten.add(eingegeben);
+    }
+
     final wellKnownZiel =
         await _loeseWellKnownAuf(basis, benutzer, passwort, diagnose);
     if (wellKnownZiel != null && !kandidaten.contains(wellKnownZiel)) {

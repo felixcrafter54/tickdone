@@ -6,9 +6,12 @@ und ist nicht änderbar. Lösung: **Same-Origin-Reverse-Proxy**. Die Web-App
 spricht CalDAV nicht direkt an, sondern über `/caldav/` auf der **eigenen**
 Domain. Aus Browsersicht ist das same-origin → CORS entfällt komplett.
 
-Die App macht das automatisch: im Web-Build ist die CalDAV-Basis fest
-`https://<eure-domain>/caldav/` (siehe `webCaldavPfad` in
-`lib/services/caldav_service.dart`), keine Discovery, kein Server-Feld im Login.
+Die App macht das automatisch: im Web-Build ist die CalDAV-Basis die eigene
+Domain; der nginx reicht die **RFC-6764-Discovery** (`.well-known`) UND alle
+**WebDAV-Methoden** an den echten Server durch. Damit funktioniert ein
+**beliebiger** CalDAV-Server/Basispfad (Nextcloud `/remote.php/dav`, Radicale
+`/`, ownCloud/OpenCloud, Baikal ...) – nicht mehr nur ein fest verdrahtetes
+`/caldav/`. Kein Server-Feld im Login; angezeigt wird „Verbunden mit ...".
 Android/Desktop bleiben unverändert beim direkten Server.
 
 ## Aufbau (Variante B)
@@ -16,7 +19,7 @@ Android/Desktop bleiben unverändert beim direkten Server.
 ```
 Browser ── HTTPS ──▶ Nginx Proxy Manager ──▶ [tickdone-web]
                      (SSL + Forward)           ├── /            → Flutter-Web
-                                               └── /caldav/     → cloud.app-noster.de/caldav/
+                                               └── .well-known + WebDAV-Methoden → <CALDAV_HOST>
 ```
 
 Der `tickdone-web`-Container (dieses Verzeichnis) liefert die App **und** proxyt
@@ -30,8 +33,10 @@ nur in ein schlankes nginx kopiert (kein GB-großes SDK-Image, kein Dart-Version
 Ärger, Build in Sekunden). Dasselbe Dockerfile läuft lokal wie in der CI.
 
 Die **CalDAV-Server-Adresse steckt NICHT im Image/Repo**, sondern kommt zur
-Laufzeit aus der Umgebungsvariable **`CALDAV_HOST`** (nur der Host, ohne Schema
-und ohne `/caldav/`). So bleibt sie aus dem public Repo heraus.
+Laufzeit aus der Umgebungsvariable **`CALDAV_HOST`**. Die darf tolerant
+eingetragen werden – so, wie der Dienst sie ausgibt (mit/ohne Schema, mit/ohne
+Pfad, mit/ohne End-Slash); für den Proxy wird daraus automatisch der blanke
+Host abgeleitet. So bleibt sie aus dem public Repo heraus.
 
 ### Weg 1 (empfohlen): fertiges Image aus GHCR ziehen
 Die GitHub-Actions-CI baut bei jedem Push auf `main` das Image und pusht es nach
@@ -77,14 +82,17 @@ docker compose -f deploy/web/docker-compose.yml up --build
   eigenem Server ok, aber niemals über HTTP.
 - **`proxy_pass` fest auf den einen CalDAV-Host** (kein offener Proxy).
 - **Host-Header + SNI** müssen gesetzt sein (`proxy_ssl_server_name on`), sonst
-  antwortet der Zielserver falsch. **End-Slash bei `/caldav/` beibehalten.**
-- **href-Auflösung:** Der Proxy-Pfad ist bewusst `/caldav/` (identisch zum
-  Zielserver). Liefert der Server absolute **Pfad**-hrefs (`/caldav/...`), bleiben
-  sie same-origin. Liefert er dagegen **volle URLs**
-  (`https://<dein-server>/caldav/...`), müssten diese umgeschrieben werden
-  (nginx `sub_filter`/`proxy_redirect`). → Beim ersten Login in den Browser-
-  Netzwerk-Tab schauen: gehen alle CalDAV-Requests an die eigene Domain? Falls
-  nicht, hier nachbessern.
+  antwortet der Zielserver falsch.
+- **Routing:** GET/HEAD/POST liefern die SPA; alle übrigen (WebDAV-)Methoden und
+  `/.well-known/` gehen an den echten Server – am gleichen Pfad. So bleiben die
+  Basispfade beliebig (Discovery findet den richtigen).
+- **href-Auflösung (wichtigster Fallstrick):** Liefert der Server absolute
+  **Pfad**-hrefs/Redirects (`/caldav/...`, `/remote.php/dav/...`), bleiben sie
+  same-origin und alles funktioniert. Liefert er dagegen **volle URLs** mit
+  eigenem Host (`https://<dein-server>/...`), zeigt die App zwar „Verbunden mit",
+  die Requests gingen aber cross-origin ins Leere → dann in nginx umschreiben
+  (`sub_filter`). Beim ersten Login in den Browser-Netzwerk-Tab schauen: gehen
+  alle CalDAV-Requests an die eigene Domain?
 
 ## Lokal testen (localhost, ohne NPM)
 
