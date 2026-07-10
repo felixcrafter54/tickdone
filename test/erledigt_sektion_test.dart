@@ -41,7 +41,7 @@ Widget _app(AppState state) => ChangeNotifierProvider<AppState>.value(
     );
 
 void main() {
-  AppState _mitAufgaben() {
+  AppState mitAufgaben() {
     final state = AppState(_FakeSpeicher());
     state.aktiveListe = Calendar(
       uid: 'l1',
@@ -59,7 +59,7 @@ void main() {
 
   testWidgets('Erledigte liegen eingeklappt unter "Erledigt N"',
       (tester) async {
-    await tester.pumpWidget(_app(_mitAufgaben()));
+    await tester.pumpWidget(_app(mitAufgaben()));
     await tester.pump();
 
     // Offene Aufgaben sind sichtbar.
@@ -74,7 +74,7 @@ void main() {
 
   testWidgets('Tippen auf den Kopf klappt die erledigten Aufgaben auf',
       (tester) async {
-    await tester.pumpWidget(_app(_mitAufgaben()));
+    await tester.pumpWidget(_app(mitAufgaben()));
     await tester.pump();
 
     await tester.tap(find.text('Erledigt'));

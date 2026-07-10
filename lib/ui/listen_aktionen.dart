@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import 'app_theme.dart';
-import 'aufgaben_screen.dart' show istDesktop;
+import 'kontext_menu.dart';
 
 /// Aktionen zur Listenverwaltung (Umbenennen, Duplizieren, Löschen) –
 /// von PC (Rechtsklick-Menü) und Handy (Drei-Punkte-Menü) genutzt.
@@ -65,48 +65,33 @@ abstract final class ListenAktionen {
     }
   }
 
-  /// Die Menüeinträge (Umbenennen, Duplizieren, Löschen) als PopupMenuItems –
-  /// für den Drei-Punkte-Button (Handy).
-  static List<PopupMenuEntry<void Function()>> menueEintraege(
+  /// Die Menüeinträge (Umbenennen, Duplizieren, Löschen) für die gemeinsame
+  /// Kontextmenü-Komponente ([KontextMenuBereich] per Rechtsklick /
+  /// [KontextMenuKnopf] per Drei-Punkte).
+  static List<KontextEintrag> eintraege(
     BuildContext context,
     Calendar liste,
   ) {
     return [
-      PopupMenuItem(
-        value: () => umbenennen(context, liste),
-        child: const _Zeile(Icons.edit_outlined, 'Liste umbenennen',
-            kuerzel: 'F2'),
+      KontextAktion(
+        icon: Icons.edit_outlined,
+        text: 'Liste umbenennen',
+        kuerzel: 'F2',
+        onTap: () => umbenennen(context, liste),
       ),
-      PopupMenuItem(
-        value: () => duplizieren(context, liste),
-        child: const _Zeile(Icons.copy_outlined, 'Liste duplizieren'),
+      KontextAktion(
+        icon: Icons.copy_outlined,
+        text: 'Liste duplizieren',
+        onTap: () => duplizieren(context, liste),
       ),
-      PopupMenuItem(
-        value: () => loeschen(context, liste),
-        child: const _Zeile(Icons.delete_outline, 'Liste löschen',
-            kuerzel: 'Entf', rot: true),
+      KontextAktion(
+        icon: Icons.delete_outline,
+        text: 'Liste löschen',
+        kuerzel: 'Entf',
+        rot: true,
+        onTap: () => loeschen(context, liste),
       ),
     ];
-  }
-
-  /// Verankertes Menü am Klickpunkt (PC-Rechtsklick).
-  static Future<void> menue(
-    BuildContext context,
-    Calendar liste,
-    Offset position,
-  ) async {
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
-    final aktion = await showMenu<void Function()>(
-      context: context,
-      color: context.farben.flaecheHover,
-      position: RelativeRect.fromRect(
-        position & const Size(1, 1),
-        Offset.zero & overlay.size,
-      ),
-      items: menueEintraege(context, liste),
-    );
-    aktion?.call();
   }
 
   static Future<String?> _nameDialog(
@@ -143,31 +128,5 @@ abstract final class ListenAktionen {
     controller.dispose();
     final name = ergebnis?.trim();
     return (name == null || name.isEmpty) ? null : name;
-  }
-}
-
-class _Zeile extends StatelessWidget {
-  const _Zeile(this.icon, this.text, {this.kuerzel, this.rot = false});
-
-  final IconData icon;
-  final String text;
-  final String? kuerzel;
-  final bool rot;
-
-  @override
-  Widget build(BuildContext context) {
-    final farbe = rot ? context.farben.ueberfaellig : context.farben.text;
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: farbe),
-        const SizedBox(width: 12),
-        Expanded(child: Text(text, style: TextStyle(color: farbe))),
-        // Tastenkürzel nur auf dem Desktop anzeigen.
-        if (kuerzel != null && istDesktop)
-          Text(kuerzel!,
-              style: TextStyle(
-                  color: context.farben.textGedimmt, fontSize: 12)),
-      ],
-    );
   }
 }
