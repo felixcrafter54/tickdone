@@ -5,6 +5,7 @@ import '../models/aufgabe.dart';
 import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgaben_screen.dart';
+import 'kontext_menu.dart';
 import 'relative_zeit.dart';
 
 /// Detailansicht einer Aufgabe: Schritte, Fälligkeit, Priorität, Notiz.
@@ -451,30 +452,34 @@ class _SchrittZeileState extends State<_SchrittZeile> {
                 context.read<AppState>().setzeTitel(schritt.uid, wert),
           ),
         ),
-        PopupMenuButton<void Function()>(
-          icon: Icon(Icons.more_vert,
-              size: 18, color: context.farben.textGedimmt),
+        KontextMenuKnopf(
+          iconGroesse: 18,
+          farbe: context.farben.textGedimmt,
           tooltip: 'Schritt-Aktionen',
-          onSelected: (aktion) => aktion(),
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: () => context
+          eintraege: [
+            KontextAktion(
+              icon: schritt.erledigt
+                  ? Icons.radio_button_unchecked
+                  : Icons.check_circle_outline,
+              text: schritt.erledigt
+                  ? 'Als offen markieren'
+                  : 'Als erledigt markieren',
+              onTap: () => context
                   .read<AppState>()
                   .setzeErledigt(schritt.uid, !schritt.erledigt),
-              child: Text(schritt.erledigt
-                  ? 'Als offen markieren'
-                  : 'Als erledigt markieren'),
             ),
-            PopupMenuItem(
-              value: () =>
+            KontextAktion(
+              icon: Icons.upgrade,
+              text: 'Zur Aufgabe höherstufen',
+              onTap: () =>
                   context.read<AppState>().stufeSchrittHoch(schritt.uid),
-              child: const Text('Zur Aufgabe höherstufen'),
             ),
-            PopupMenuItem(
-              value: () =>
+            KontextAktion(
+              icon: Icons.delete_outline,
+              text: 'Schritt löschen',
+              rot: true,
+              onTap: () =>
                   AufgabenScreen.loeschenBestaetigen(context, schritt),
-              child: Text('Schritt löschen',
-                  style: TextStyle(color: context.farben.ueberfaellig)),
             ),
           ],
         ),

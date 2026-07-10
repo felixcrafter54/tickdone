@@ -8,6 +8,7 @@ import 'app_theme.dart';
 import 'aufgabe_detail_screen.dart';
 import 'aufgaben_screen.dart';
 import 'einstellungen_screen.dart';
+import 'kontext_menu.dart';
 import 'listen_aktionen.dart';
 import 'listen_screen.dart';
 
@@ -349,10 +350,9 @@ class _ListenSpalte extends StatelessWidget {
                         context.read<AppState>().setzeListenHover(liste.uid),
                     onExit: (_) =>
                         context.read<AppState>().setzeListenHover(null),
-                    child: GestureDetector(
-                      // PC: Rechtsklick öffnet das Listen-Menü am Klickpunkt.
-                      onSecondaryTapDown: (d) => ListenAktionen.menue(
-                          context, liste, d.globalPosition),
+                    // PC: Rechtsklick öffnet das Listen-Menü am Klickpunkt.
+                    child: KontextMenuBereich(
+                      eintraege: ListenAktionen.eintraege(context, liste),
                       child: ListTile(
                         dense: true,
                         selected: app.aktiveListe?.uid == liste.uid,
@@ -369,13 +369,10 @@ class _ListenSpalte extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ListenZaehler(app.offeneAnzahl(liste.uid)),
-                            PopupMenuButton<void Function()>(
-                              icon: const Icon(Icons.more_vert),
+                            KontextMenuKnopf(
+                              eintraege:
+                                  ListenAktionen.eintraege(context, liste),
                               tooltip: 'Listen-Aktionen',
-                              onSelected: (aktion) => aktion(),
-                              itemBuilder: (menuContext) =>
-                                  ListenAktionen.menueEintraege(
-                                      menuContext, liste),
                             ),
                           ],
                         ),

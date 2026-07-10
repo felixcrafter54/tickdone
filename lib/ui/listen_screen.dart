@@ -7,6 +7,7 @@ import 'app_theme.dart';
 import 'aufgaben_screen.dart';
 import 'einstellungen_screen.dart';
 import 'haupt_screen.dart';
+import 'kontext_menu.dart';
 import 'listen_aktionen.dart';
 
 /// Übersicht der Aufgabenlisten (Collections mit VTODO) nach der Anmeldung.
@@ -115,40 +116,41 @@ class ListenScreen extends StatelessWidget {
                           ),
                         const Divider(),
                         for (final liste in listen)
-                          ListTile(
-                            leading: Icon(
-                              Icons.checklist,
-                              color: _farbeVon(liste) ??
-                                  Theme.of(context).colorScheme.primary,
+                          KontextMenuBereich(
+                            eintraege:
+                                ListenAktionen.eintraege(context, liste),
+                            child: ListTile(
+                              leading: Icon(
+                                Icons.checklist,
+                                color: _farbeVon(liste) ??
+                                    Theme.of(context).colorScheme.primary,
+                              ),
+                              title: Text(liste.displayName),
+                              subtitle:
+                                  (liste.description?.isNotEmpty ?? false)
+                                      ? Text(liste.description!)
+                                      : null,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ListenZaehler(
+                                      appState.offeneAnzahl(liste.uid)),
+                                  KontextMenuKnopf(
+                                    eintraege: ListenAktionen.eintraege(
+                                        context, liste),
+                                    tooltip: 'Listen-Aktionen',
+                                  ),
+                                ],
+                              ),
+                              onTap: () {
+                                context.read<AppState>().oeffneListe(liste);
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const AufgabenScreen(),
+                                  ),
+                                );
+                              },
                             ),
-                            title: Text(liste.displayName),
-                            subtitle:
-                                (liste.description?.isNotEmpty ?? false)
-                                    ? Text(liste.description!)
-                                    : null,
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                ListenZaehler(
-                                    appState.offeneAnzahl(liste.uid)),
-                                PopupMenuButton<void Function()>(
-                                  icon: const Icon(Icons.more_vert),
-                                  tooltip: 'Listen-Aktionen',
-                                  onSelected: (aktion) => aktion(),
-                                  itemBuilder: (menuContext) =>
-                                      ListenAktionen.menueEintraege(
-                                          menuContext, liste),
-                                ),
-                              ],
-                            ),
-                            onTap: () {
-                              context.read<AppState>().oeffneListe(liste);
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const AufgabenScreen(),
-                                ),
-                              );
-                            },
                           ),
                       ],
                     ),

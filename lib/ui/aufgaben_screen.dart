@@ -8,6 +8,7 @@ import '../models/aufgabe.dart';
 import '../state/app_state.dart';
 import 'app_theme.dart';
 import 'aufgabe_detail_screen.dart';
+import 'kontext_menu.dart';
 import 'relative_zeit.dart';
 
 /// Läuft die App auf einem Desktop (inkl. Desktop-Browser)? Dann Rechtsklick-
@@ -372,7 +373,14 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
         // kippt die Richtung; der Pfeil zeigt auf-/absteigend.
         if (appState.aktiveSmartliste != Smartliste.geplant)
           PopupMenuButton<Sortierung>(
-            icon: const Icon(Icons.sort),
+            // Farbig hervorgehoben, wenn eine andere Sortierung als "Manuell"
+            // aktiv ist – so sieht man auf einen Blick, dass sortiert wird.
+            icon: Icon(
+              Icons.sort,
+              color: appState.sortierung != Sortierung.manuell
+                  ? context.farben.akzent
+                  : null,
+            ),
             tooltip: 'Sortieren',
             onSelected: (wert) =>
                 context.read<AppState>().waehleSortierung(wert),
@@ -935,28 +943,6 @@ class AufgabeKontextMenu extends StatelessWidget {
   final List<Aufgabe> ziele;
   final Widget child;
 
-  /// Menüeintrag mit Icon, Text und optional Kürzel (nur Desktop).
-  Widget _eintrag(
-    BuildContext context, {
-    required IconData icon,
-    required String text,
-    required VoidCallback onPressed,
-    String? kuerzel,
-    bool rot = false,
-  }) {
-    final farbe = rot ? context.farben.ueberfaellig : context.farben.text;
-    return MenuItemButton(
-      leadingIcon: Icon(icon, size: 18, color: farbe),
-      trailingIcon: (kuerzel != null && istDesktop)
-          ? Text(kuerzel,
-              style: TextStyle(
-                  color: context.farben.textGedimmt, fontSize: 12))
-          : null,
-      onPressed: onPressed,
-      child: Text(text, style: TextStyle(color: farbe)),
-    );
-  }
-
   Future<void> _loeschen(BuildContext context, AppState app) async {
     if (ziele.length == 1) {
       await AufgabenScreen.loeschenBestaetigen(context, ziele.first);
@@ -1009,121 +995,98 @@ class AufgabeKontextMenu extends StatelessWidget {
     final verschiebbar = wurzeln.isNotEmpty && andereListen.isNotEmpty;
     final mehr = ziele.length > 1;
 
-    return MenuAnchor(
-      menuChildren: [
-        _eintrag(
-          context,
-          icon: Icons.wb_sunny_outlined,
-          text: alleMeinTag
-              ? 'Aus "Mein Tag" entfernen'
-              : 'Zu "Mein Tag" hinzufügen',
-          kuerzel: 'Strg+T',
-          onPressed: () {
-            for (final a in ziele) {
-              app.setzeMeinTag(a.uid, !alleMeinTag);
-            }
-          },
-        ),
-        _eintrag(
-          context,
-          icon: alleWichtig ? Icons.star : Icons.star_border,
-          text: alleWichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
-          onPressed: () {
-            for (final a in ziele) {
-              app.setzeWichtig(a.uid, !alleWichtig);
-            }
-          },
-        ),
-        _eintrag(
-          context,
-          icon: alleErledigt
-              ? Icons.radio_button_unchecked
-              : Icons.check_circle_outline,
-          text: alleErledigt ? 'Als offen markieren' : 'Als erledigt markieren',
-          kuerzel: 'Strg+D',
-          onPressed: () {
-            for (final a in ziele) {
-              app.setzeErledigt(a.uid, !alleErledigt);
-            }
-          },
-        ),
-        const Divider(height: 1),
-        _eintrag(
-          context,
-          icon: Icons.today,
-          text: 'Heute fällig',
-          onPressed: () {
-            for (final a in ziele) {
-              app.setzeFaellig(
-                  a.uid, DateTime(heute.year, heute.month, heute.day));
-            }
-          },
-        ),
-        _eintrag(
-          context,
-          icon: Icons.event,
-          text: 'Morgen fällig',
-          onPressed: () {
-            for (final a in ziele) {
-              app.setzeFaellig(
-                  a.uid, DateTime(morgen.year, morgen.month, morgen.day));
-            }
-          },
-        ),
-        _eintrag(
-          context,
-          icon: Icons.event_busy,
-          text: 'Termin entfernen',
-          onPressed: () {
-            for (final a in ziele) {
-              app.setzeFaellig(a.uid, null);
-            }
-          },
-        ),
-        if (verschiebbar) const Divider(height: 1),
-        if (verschiebbar)
-          SubmenuButton(
-            leadingIcon: Icon(Icons.drive_file_move_outline,
-                size: 18, color: context.farben.text),
-            menuChildren: [
-              for (final liste in andereListen)
-                _eintrag(
-          context,
-                  icon: Icons.checklist,
-                  text: liste.displayName,
-                  onPressed: () {
-                    for (final a in wurzeln) {
-                      app.verschiebeAufgabe(a.uid, liste);
-                    }
-                  },
-                ),
-            ],
-            child: Text(
-                mehr ? 'Aufgaben verschieben in …' : 'Aufgabe verschieben in …',
-                style: TextStyle(color: context.farben.text)),
-          ),
-        const Divider(height: 1),
-        _eintrag(
-          context,
-          icon: Icons.delete_outline,
-          text: mehr ? 'Aufgaben löschen' : 'Aufgabe löschen',
-          kuerzel: 'Entf',
-          rot: true,
-          onPressed: () => _loeschen(context, app),
-        ),
-      ],
-      builder: (context, controller, child) => GestureDetector(
-        // Rechtsklick öffnet/schließt das Menü am Klickpunkt.
-        onSecondaryTapDown: (details) {
-          if (controller.isOpen) {
-            controller.close();
-          } else {
-            controller.open(position: details.localPosition);
+    final eintraege = <KontextEintrag>[
+      KontextAktion(
+        icon: Icons.wb_sunny_outlined,
+        text: alleMeinTag
+            ? 'Aus "Mein Tag" entfernen'
+            : 'Zu "Mein Tag" hinzufügen',
+        kuerzel: 'Strg+T',
+        onTap: () {
+          for (final a in ziele) {
+            app.setzeMeinTag(a.uid, !alleMeinTag);
           }
         },
-        child: child,
       ),
-      child: child,
-    );
+      KontextAktion(
+        icon: alleWichtig ? Icons.star : Icons.star_border,
+        text: alleWichtig ? 'Wichtig entfernen' : 'Als wichtig markieren',
+        onTap: () {
+          for (final a in ziele) {
+            app.setzeWichtig(a.uid, !alleWichtig);
+          }
+        },
+      ),
+      KontextAktion(
+        icon: alleErledigt
+            ? Icons.radio_button_unchecked
+            : Icons.check_circle_outline,
+        text: alleErledigt ? 'Als offen markieren' : 'Als erledigt markieren',
+        kuerzel: 'Strg+D',
+        onTap: () {
+          for (final a in ziele) {
+            app.setzeErledigt(a.uid, !alleErledigt);
+          }
+        },
+      ),
+      const KontextTrenner(),
+      KontextAktion(
+        icon: Icons.today,
+        text: 'Heute fällig',
+        onTap: () {
+          for (final a in ziele) {
+            app.setzeFaellig(
+                a.uid, DateTime(heute.year, heute.month, heute.day));
+          }
+        },
+      ),
+      KontextAktion(
+        icon: Icons.event,
+        text: 'Morgen fällig',
+        onTap: () {
+          for (final a in ziele) {
+            app.setzeFaellig(
+                a.uid, DateTime(morgen.year, morgen.month, morgen.day));
+          }
+        },
+      ),
+      KontextAktion(
+        icon: Icons.event_busy,
+        text: 'Termin entfernen',
+        onTap: () {
+          for (final a in ziele) {
+            app.setzeFaellig(a.uid, null);
+          }
+        },
+      ),
+      if (verschiebbar) const KontextTrenner(),
+      if (verschiebbar)
+        KontextUntermenu(
+          icon: Icons.drive_file_move_outline,
+          text: mehr ? 'Aufgaben verschieben in …' : 'Aufgabe verschieben in …',
+          kinder: [
+            for (final liste in andereListen)
+              KontextAktion(
+                icon: Icons.checklist,
+                text: liste.displayName,
+                onTap: () {
+                  for (final a in wurzeln) {
+                    app.verschiebeAufgabe(a.uid, liste);
+                  }
+                },
+              ),
+          ],
+        ),
+      const KontextTrenner(),
+      KontextAktion(
+        icon: Icons.delete_outline,
+        text: mehr ? 'Aufgaben löschen' : 'Aufgabe löschen',
+        kuerzel: 'Entf',
+        rot: true,
+        onTap: () => _loeschen(context, app),
+      ),
+    ];
+
+    return KontextMenuBereich(eintraege: eintraege, child: child);
   }
 }
