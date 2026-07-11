@@ -485,16 +485,11 @@ class _SchrittZeileState extends State<_SchrittZeile> {
           ],
         ),
         // Ziehgriff zum Umsortieren der Schritte (Schritte sind immer
-        // manuell sortiert).
+        // manuell sortiert). Auf Touch per Longpress (siehe ziehGriff).
         if (widget.ziehIndex != null)
-          ReorderableDragStartListener(
-            index: widget.ziehIndex!,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 2, right: 4),
-              child: Icon(Icons.drag_handle,
-                  size: 20, color: context.farben.textGedimmt),
-            ),
-          ),
+          ziehGriff(context, widget.ziehIndex!,
+              groesse: 20,
+              padding: const EdgeInsets.only(left: 2, right: 4)),
           ],
         ),
         Divider(height: 1, color: context.farben.rahmen),
