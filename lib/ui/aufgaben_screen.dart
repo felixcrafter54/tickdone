@@ -943,19 +943,14 @@ class AufgabenZeile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final zeile = ListTile(
+    // Rahmen + Hintergrund bewusst NICHT über ListTile.shape/tileColor: Material
+    // zeichnet die Border als eigene PhysicalShape-Ebene, die auf CanvasKit
+    // (Web) beim Umsortieren NICHT mit dem Inhalt mitwandert – Rahmen und Inhalt
+    // driften auseinander (v.a. schmale/einspaltige Ansicht). Stattdessen unten
+    // per DecoratedBox, das als Teil der Zeile animiert.
+    final inhalt = ListTile(
       selected: ausgewaehlt,
-      tileColor: context.farben.flaeche,
-      selectedTileColor: context.farben.flaecheGewaehlt,
       hoverColor: context.farben.flaecheHover,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(tickdoneRadius),
-        side: BorderSide(
-          color: ausgewaehlt
-              ? context.farben.akzentGedimmt
-              : context.farben.rahmen,
-        ),
-      ),
       // Im Auswahlmodus: Auswahlkreis (gefüllt = markiert). Sonst:
       // Tippen aufs Icon hakt ab bzw. öffnet wieder (optimistisch).
       leading: auswahlModus
@@ -1016,6 +1011,23 @@ class AufgabenZeile extends StatelessWidget {
       ),
       onTap: onTap,
       onLongPress: onLongPress,
+    );
+
+    // Rahmen/Hintergrund als normale Malerei (DecoratedBox) – wandert beim
+    // Umsortieren zusammen mit dem Inhalt (siehe Kommentar oben).
+    final zeile = DecoratedBox(
+      decoration: BoxDecoration(
+        color: ausgewaehlt
+            ? context.farben.flaecheGewaehlt
+            : context.farben.flaeche,
+        borderRadius: BorderRadius.circular(tickdoneRadius),
+        border: Border.all(
+          color: ausgewaehlt
+              ? context.farben.akzentGedimmt
+              : context.farben.rahmen,
+        ),
+      ),
+      child: Material(type: MaterialType.transparency, child: inhalt),
     );
 
     return Padding(
