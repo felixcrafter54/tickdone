@@ -181,6 +181,7 @@ class _AufgabeDetailScreenState extends State<AufgabeDetailScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     buildDefaultDragHandles: false,
+                    proxyDecorator: tickdoneZiehProxy,
                     itemCount: schritte.length,
                     onReorderItem: (alt, neu) => context
                         .read<AppState>()
