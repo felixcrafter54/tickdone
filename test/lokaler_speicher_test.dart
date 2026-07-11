@@ -105,6 +105,26 @@ void main() {
       expect(state.offeneAnzahl('l1'), 1);
     });
 
+    test('listeVonAufgabe ordnet eine Aufgabe ihrer Herkunftsliste zu',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final cache = LokalerSpeicher(SharedPreferences.getInstance());
+      await cache.speichern(Schnappschuss(
+        listen: [liste('l1'), liste('l2')],
+        aufgabenProListe: {
+          'l1': [ausIcal('u1', 'Aufgabe A')],
+          'l2': [ausIcal('u2', 'Aufgabe B')],
+        },
+      ));
+
+      final state = AppState(null, null, cache);
+      await state.ladeCache();
+
+      expect(state.listeVonAufgabe('u1')?.uid, 'l1');
+      expect(state.listeVonAufgabe('u2')?.uid, 'l2');
+      expect(state.listeVonAufgabe('unbekannt'), isNull);
+    });
+
     test('ladeCache überschreibt vorhandene Serverdaten nicht', () async {
       SharedPreferences.setMockInitialValues({});
       final cache = LokalerSpeicher(SharedPreferences.getInstance());

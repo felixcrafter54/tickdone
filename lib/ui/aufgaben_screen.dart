@@ -138,6 +138,10 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
   /// erledigte Aufgaben sollen die offene Liste nicht zumüllen.
   bool _erledigtEingeklappt = true;
 
+  /// Nur in Smart-Listen: Aufgaben nach Herkunftsliste gruppieren (mit
+  /// Überschrift je Liste) statt einer flachen Liste.
+  bool _nachListeGruppieren = false;
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -406,6 +410,20 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
                 ),
             ],
           ),
+        // Nur in Smart-Listen: nach Herkunftsliste gruppieren (mit Überschrift
+        // je Liste). Farbig, wenn aktiv.
+        if (appState.aktiveSmartliste != null)
+          IconButton(
+            icon: Icon(
+              Icons.workspaces_outline,
+              color: _nachListeGruppieren ? context.farben.akzent : null,
+            ),
+            tooltip: _nachListeGruppieren
+                ? 'Gruppierung aufheben'
+                : 'Nach Liste gruppieren',
+            onPressed: () => setState(
+                () => _nachListeGruppieren = !_nachListeGruppieren),
+          ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Aktualisieren',
@@ -492,6 +510,14 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
   /// und nicht im Auswahlmodus (dort wählt Tippen aus, statt zu ziehen).
   bool _umsortierbar(AppState app) => _grundSortierbar(app) && !_auswahlModus;
 
+  /// Name der Herkunftsliste, den die Zeile im Untertitel zeigt: nur in
+  /// Smart-Listen und nur, wenn NICHT ohnehin nach Liste gruppiert wird
+  /// (sonst steht der Name schon in der Gruppenüberschrift).
+  String? _listenNameFuer(AppState app, Aufgabe aufgabe) {
+    if (app.aktiveSmartliste == null || _nachListeGruppieren) return null;
+    return app.listeVonAufgabe(aufgabe.uid)?.displayName;
+  }
+
   Widget _zeile(BuildContext context, AppState appState, Aufgabe aufgabe,
       {int? ziehIndex}) {
     final markiert = _auswahlModus
@@ -510,6 +536,7 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
       onTap: () => _aufTap(aufgabe),
       onLongPress: () => _auswahlUmschalten(aufgabe.uid),
       ziehIndex: ziehIndex,
+      listenName: _listenNameFuer(appState, aufgabe),
     );
   }
 
@@ -522,28 +549,44 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
     final offen = [for (final a in aufgaben) if (!a.erledigt) a];
     final erledigt = [for (final a in aufgaben) if (a.erledigt) a];
     // Reorderbar hängt an _grundSortierbar (NICHT am Auswahlmodus): So bleibt
-    // der Widget-Typ beim Wechsel in den Auswahlmodus gleich und die
-    // Scroll-Position springt nicht nach oben. Die Ziehgriffe werden im
-    // Auswahlmodus per _umsortierbar ausgeblendet.
+    // das Verhalten beim Wechsel in den Auswahlmodus gleich. Die Ziehgriffe
+    // werden im Auswahlmodus per _umsortierbar ausgeblendet.
     final reorderbar = _grundSortierbar(appState);
+
+    // Ziehbare Ansicht: bewusst das klassische ReorderableListView (nicht
+    // SliverReorderableList) – dessen Umsortier-Animation (andere Zeilen weichen
+    // aus) funktioniert auch auf Touch/Handy zuverlässig. Die Erledigt-Sektion
+    // hängt als Footer darunter.
+    if (reorderbar) {
+      return ReorderableListView.builder(
+        scrollController: _scrollController,
+        buildDefaultDragHandles: false,
+        proxyDecorator: tickdoneZiehProxy,
+        padding: const EdgeInsets.only(bottom: 12),
+        itemCount: offen.length,
+        onReorderItem: (alt, neu) =>
+            context.read<AppState>().ordneAufgabenNeu(alt, neu),
+        itemBuilder: (context, index) => _zeile(
+          context,
+          appState,
+          offen[index],
+          ziehIndex: _umsortierbar(appState) ? index : null,
+        ),
+        footer: erledigt.isEmpty
+            ? null
+            : _erledigtFooter(context, appState, erledigt),
+      );
+    }
+
+    // Nicht ziehbar (Smart-Listen / andere Sortierungen): als Slivers, optional
+    // nach Herkunftsliste gruppiert.
+    final gruppiert = appState.aktiveSmartliste != null && _nachListeGruppieren;
     return CustomScrollView(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        // --- Offene Aufgaben ---
-        if (reorderbar)
-          SliverReorderableList(
-            itemCount: offen.length,
-            proxyDecorator: tickdoneZiehProxy,
-            onReorderItem: (alt, neu) =>
-                context.read<AppState>().ordneAufgabenNeu(alt, neu),
-            itemBuilder: (context, index) => _zeile(
-              context,
-              appState,
-              offen[index],
-              ziehIndex: _umsortierbar(appState) ? index : null,
-            ),
-          )
+        if (gruppiert)
+          ..._gruppierteSlivers(context, appState, offen)
         else
           SliverList(
             delegate: SliverChildBuilderDelegate(
@@ -551,7 +594,6 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
               childCount: offen.length,
             ),
           ),
-        // Hinweis, falls nur noch erledigte Aufgaben da sind.
         if (offen.isEmpty && erledigt.isNotEmpty)
           SliverToBoxAdapter(
             child: Padding(
@@ -563,26 +605,86 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
               ),
             ),
           ),
-        // --- Erledigt-Sektion (einklappbar) ---
-        if (erledigt.isNotEmpty)
-          SliverToBoxAdapter(
-            child: _ErledigtKopf(
-              anzahl: erledigt.length,
-              eingeklappt: _erledigtEingeklappt,
-              onToggle: () => setState(
-                  () => _erledigtEingeklappt = !_erledigtEingeklappt),
-            ),
-          ),
-        if (erledigt.isNotEmpty && !_erledigtEingeklappt)
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _zeile(context, appState, erledigt[index]),
-              childCount: erledigt.length,
-            ),
-          ),
+        ..._erledigtSlivers(context, appState, erledigt),
         const SliverToBoxAdapter(child: SizedBox(height: 12)),
       ],
     );
+  }
+
+  /// Erledigt-Sektion als Footer (für die ziehbare ReorderableListView).
+  Widget _erledigtFooter(
+      BuildContext context, AppState appState, List<Aufgabe> erledigt) {
+    return Column(
+      key: const ValueKey('erledigt-footer'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ErledigtKopf(
+          anzahl: erledigt.length,
+          eingeklappt: _erledigtEingeklappt,
+          onToggle: () =>
+              setState(() => _erledigtEingeklappt = !_erledigtEingeklappt),
+        ),
+        if (!_erledigtEingeklappt)
+          for (final a in erledigt) _zeile(context, appState, a),
+      ],
+    );
+  }
+
+  /// Erledigt-Sektion als Slivers (für die nicht-ziehbare Ansicht).
+  List<Widget> _erledigtSlivers(
+      BuildContext context, AppState appState, List<Aufgabe> erledigt) {
+    if (erledigt.isEmpty) return const [];
+    return [
+      SliverToBoxAdapter(
+        child: _ErledigtKopf(
+          anzahl: erledigt.length,
+          eingeklappt: _erledigtEingeklappt,
+          onToggle: () =>
+              setState(() => _erledigtEingeklappt = !_erledigtEingeklappt),
+        ),
+      ),
+      if (!_erledigtEingeklappt)
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => _zeile(context, appState, erledigt[index]),
+            childCount: erledigt.length,
+          ),
+        ),
+    ];
+  }
+
+  /// Offene Aufgaben nach Herkunftsliste gruppiert, je Liste eine Überschrift.
+  List<Widget> _gruppierteSlivers(
+      BuildContext context, AppState appState, List<Aufgabe> offen) {
+    // Aufgaben ihrer Liste zuordnen (Reihenfolge = Reihenfolge der Listen).
+    final proListe = <String, List<Aufgabe>>{};
+    for (final a in offen) {
+      final uid = appState.listeVonAufgabe(a.uid)?.uid ?? '';
+      (proListe[uid] ??= []).add(a);
+    }
+    final reihenfolge = [for (final l in appState.aufgabenlisten) l.uid];
+    int rang(String uid) {
+      final i = reihenfolge.indexOf(uid);
+      return i == -1 ? reihenfolge.length : i;
+    }
+    final schluessel = proListe.keys.toList()
+      ..sort((a, b) => rang(a).compareTo(rang(b)));
+
+    final slivers = <Widget>[];
+    for (final uid in schluessel) {
+      final gruppe = proListe[uid]!;
+      final name = appState.listeMitUid(uid)?.displayName ?? 'Ohne Liste';
+      slivers.add(SliverToBoxAdapter(
+        child: _ListenGruppenKopf(name: name, anzahl: gruppe.length),
+      ));
+      slivers.add(SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => _zeile(context, appState, gruppe[index]),
+          childCount: gruppe.length,
+        ),
+      ));
+    }
+    return slivers;
   }
 }
 
@@ -629,6 +731,38 @@ class _ErledigtKopf extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Überschrift einer Listen-Gruppe (bei "Nach Liste gruppieren" in Smart-Listen).
+class _ListenGruppenKopf extends StatelessWidget {
+  const _ListenGruppenKopf({required this.name, required this.anzahl});
+
+  final String name;
+  final int anzahl;
+
+  @override
+  Widget build(BuildContext context) {
+    final farben = context.farben;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+      child: Row(
+        children: [
+          Icon(Icons.checklist, size: 18, color: farben.akzent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: farben.text, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('$anzahl', style: TextStyle(color: farben.textGedimmt)),
+        ],
       ),
     );
   }
@@ -770,11 +904,16 @@ class AufgabenZeile extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.ziehIndex,
+    this.listenName,
   });
 
   final Aufgabe aufgabe;
   final ({int erledigt, int gesamt})? fortschritt;
   final bool ausgewaehlt;
+
+  /// Name der Herkunftsliste – in Smart-Listen unter dem Titel gezeigt,
+  /// damit man sieht, aus welcher Liste die Aufgabe stammt. Sonst null.
+  final String? listenName;
 
   /// Im Mehrfachauswahl-Modus wird links ein Auswahlkreis statt der
   /// Erledigt-Checkbox gezeigt.
@@ -888,9 +1027,14 @@ class AufgabenZeile extends StatelessWidget {
     );
   }
 
-  /// Meta-Zeile: Mein Tag · Fälligkeit (rot wenn überfällig) · x von y · Notiz.
+  /// Meta-Zeile: [Liste ·] Mein Tag · Fälligkeit (rot wenn überfällig) ·
+  /// x von y · Notiz.
   Widget? _untertitel(BuildContext context) {
     final teile = <(String, bool)>[]; // (Text, überfällig-rot)
+    // In Smart-Listen zuerst die Herkunftsliste.
+    if (listenName != null && listenName!.isNotEmpty) {
+      teile.add((listenName!, false));
+    }
     if (aufgabe.meinTag) teile.add(('Mein Tag', false));
     if (aufgabe.faellig != null) {
       teile.add((faelligText(aufgabe.faellig!), _istUeberfaellig()));
