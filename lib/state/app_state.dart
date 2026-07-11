@@ -319,6 +319,18 @@ class AppState extends ChangeNotifier {
   List<Aufgabe> get _alleAufgaben =>
       [for (final liste in _cacheProListe.values) ...liste];
 
+  /// Herkunftsliste einer Aufgabe (per UID) – für die Smart-Listen, wo
+  /// Aufgaben aus verschiedenen Listen gemischt sind. null, wenn nicht
+  /// zuzuordnen (z.B. noch nicht im Cache).
+  Calendar? listeVonAufgabe(String uid) {
+    for (final eintrag in _cacheProListe.entries) {
+      if (eintrag.value.any((a) => a.uid == uid)) {
+        return listeMitUid(eintrag.key);
+      }
+    }
+    return null;
+  }
+
   /// Anzahl offener (nicht erledigter) Wurzel-Aufgaben einer Liste –
   /// null, solange noch nicht ermittelt.
   int? offeneAnzahl(String listenUid) {
