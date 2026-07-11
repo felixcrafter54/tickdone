@@ -21,22 +21,17 @@ bool get istDesktop =>
     defaultTargetPlatform == TargetPlatform.linux ||
     defaultTargetPlatform == TargetPlatform.macOS;
 
-/// Ziehgriff für die Umsortier-Listen (Aufgaben & Schritte). Auf Touch (auch
-/// mobiles Web) wird per LANGEM Drücken gezogen
-/// ([ReorderableDelayedDragStartListener]) – das entspricht Flutters Standard
-/// für Touch und vermeidet, dass der sofortige Drag mit der Scroll-Geste des
-/// (mobilen) Browsers kollidiert (dann weichen die anderen Zeilen nicht aus).
-/// Auf dem Desktop wird sofort gezogen.
+/// Ziehgriff für die Umsortier-Listen (Aufgaben & Schritte): sofortiges Ziehen.
 Widget ziehGriff(BuildContext context, int index,
     {double? groesse, EdgeInsetsGeometry? padding}) {
-  final griff = Padding(
-    padding: padding ?? const EdgeInsets.only(left: 4, right: 4),
-    child: Icon(Icons.drag_handle,
-        size: groesse, color: context.farben.textGedimmt),
+  return ReorderableDragStartListener(
+    index: index,
+    child: Padding(
+      padding: padding ?? const EdgeInsets.only(left: 4, right: 4),
+      child: Icon(Icons.drag_handle,
+          size: groesse, color: context.farben.textGedimmt),
+    ),
   );
-  return istDesktop
-      ? ReorderableDragStartListener(index: index, child: griff)
-      : ReorderableDelayedDragStartListener(index: index, child: griff);
 }
 
 /// Zeigt die Wurzel-Aufgaben der geöffneten Liste.
