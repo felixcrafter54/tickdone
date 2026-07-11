@@ -534,6 +534,7 @@ class _AufgabenScreenState extends State<AufgabenScreen> {
         if (reorderbar)
           SliverReorderableList(
             itemCount: offen.length,
+            proxyDecorator: tickdoneZiehProxy,
             onReorderItem: (alt, neu) =>
                 context.read<AppState>().ordneAufgabenNeu(alt, neu),
             itemBuilder: (context, index) => _zeile(
