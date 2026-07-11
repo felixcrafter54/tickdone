@@ -156,21 +156,12 @@ const tickdoneRadius = 10.0;
 /// Gemeinsamer Drag-Proxy fürs Umsortieren (Aufgaben & Schritte). Der Material-
 /// Standard-proxyDecorator zeigt beim Ziehen einen großen grauen Kasten
 /// (elevierte M3-Fläche, rechteckig) – besonders auffällig im Web. Stattdessen
-/// zeigen wir die Zeile SELBST (mit ihrer eigenen Karte), nur leicht angehoben
-/// und minimal vergrößert.
+/// zeigen wir die gezogene Zeile EXAKT wie im Ruhezustand: gleiche Breite,
+/// gleiche Karte, keine Skalierung (Skalierung machte die Zeile breiter als die
+/// übrigen und sah damit „daneben" aus).
 Widget tickdoneZiehProxy(
     Widget child, int index, Animation<double> animation) {
-  return AnimatedBuilder(
-    animation: animation,
-    builder: (context, child) {
-      final t = Curves.easeInOut.transform(animation.value);
-      return Transform.scale(
-        scale: 1 + 0.03 * t,
-        child: Material(type: MaterialType.transparency, child: child),
-      );
-    },
-    child: child,
-  );
+  return Material(type: MaterialType.transparency, child: child);
 }
 
 /// Scroll-Verhalten ohne das Material-„Stretch" am Rand – so bleiben die
